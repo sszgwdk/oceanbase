@@ -402,6 +402,10 @@ int ObExprLike::set_instr_info(ObIAllocator *exec_allocator,
       }//end deduce instrmode
     }//end else
   }
+  // optimize for special patterns
+  if (instr_info.instr_cnt_ == 1) {
+    like_ctx.string_searcher_.init(instr_info.instr_starts_[0], instr_info.instr_lengths_[0]);
+  }
   LOG_DEBUG("end set instr info", K(cs_type), K(pattern), K(escape),
             K(escape_coll), K(instr_info));
   return ret;
@@ -415,6 +419,7 @@ int ObExprLike::calc_with_instr_mode(T &result,
 {
   int ret = OB_SUCCESS;
   const InstrInfo instr_info = like_ctx.instr_info_;
+  const StringSearcher &string_searcher = like_ctx.string_searcher_;
   const int32_t text_len = text.length();
   if (OB_UNLIKELY(cs_type != CS_TYPE_UTF8MB4_BIN)) {
     ret = OB_INVALID_ARGUMENT;
@@ -427,19 +432,19 @@ int ObExprLike::calc_with_instr_mode(T &result,
     int64_t res = 0;
     switch(instr_info.instr_mode_) {
       case START_WITH_PERCENT_SIGN: {
-        res = match_with_instr_mode<true, false>(text, instr_info);
+        res = match_with_instr_mode<true, false>(text, instr_info, string_searcher);
         break;
       }
       case START_END_WITH_PERCENT_SIGN: {
-        res = match_with_instr_mode<true, true>(text, instr_info);
+        res = match_with_instr_mode<true, true>(text, instr_info, string_searcher);
         break;
       }
       case END_WITH_PERCENT_SIGN: {
-        res = match_with_instr_mode<false, true>(text, instr_info);
+        res = match_with_instr_mode<false, true>(text, instr_info, string_searcher);
         break;
       }
       case MIDDLE_PERCENT_SIGN: {
-        res = match_with_instr_mode<false ,false>(text, instr_info);
+        res = match_with_instr_mode<false, false>(text, instr_info, string_searcher);
         break;
       }
       default: {
@@ -776,7 +781,9 @@ int ObExprLike::like_varchar(const ObExpr &expr, ObEvalCtx &ctx,  ObDatum &expr_
 
 
 template <bool percent_sign_start, bool percent_sign_end>
-int64_t ObExprLike::match_with_instr_mode(const ObString &text, const InstrInfo instr_info)
+int64_t ObExprLike::match_with_instr_mode(const ObString &text,
+                                          const InstrInfo instr_info,
+                                          const StringSearcher &string_searcher)
 {
   int64_t res = 0;
   const char *text_ptr = text.ptr();
@@ -786,6 +793,24 @@ int64_t ObExprLike::match_with_instr_mode(const ObString &text, const InstrInfo 
   bool match = true;
   int64_t idx = 0;
   int64_t idx_end = percent_sign_end ? instr_info.instr_cnt_ : instr_info.instr_cnt_ - 1;
+
+  // optimize to calc substring, start_with, end_with or equal.
+  if (idx_end == 1) {
+    const uint32_t pattern_len = instr_len[0];
+    if (percent_sign_start && percent_sign_end) {
+      return string_searcher.is_substring(text_ptr, text_ptr + text_len);
+    }
+    if (!percent_sign_start && percent_sign_end) {
+      return string_searcher.start_with(text_ptr, text_ptr + text_len);
+    }
+    if (percent_sign_start && !percent_sign_end) {
+      return string_searcher.end_with(text_ptr, text_ptr + text_len);
+    }
+    if (!percent_sign_start && !percent_sign_end) {
+      return string_searcher.equal(text_ptr, text_ptr + text_len);
+    }
+  }
+
   // if not start with %, memcmp for first instr.
   if (!percent_sign_start) {
     if (text_len < instr_len[0]) {
@@ -847,10 +872,11 @@ struct ObNonInstrModeMatcher
 
 template <bool NullCheck, bool UseInstrMode, INSTR_MODE InstrMode>
 int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
-                                const ObCollationType coll_type,
-                                const int32_t escape_wc,
-                                const ObString &pattern_val,
-                                const InstrInfo instr_info)
+                                 const ObCollationType coll_type,
+                                 const int32_t escape_wc,
+                                 const ObString &pattern_val,
+                                 const InstrInfo instr_info,
+                                 const StringSearcher &string_searcher)
 {
   int ret = OB_SUCCESS;
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
@@ -871,7 +897,7 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
           if (UseInstrMode) {
             int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
                     : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
-                    (text_datums[i].get_string(), instr_info);
+                    (text_datums[i].get_string(), instr_info, string_searcher);
             res_datums[i].set_int(res);
           } else {
             res_datums[i].set_int(ObNonInstrModeMatcher()(coll_type, text_datums[i].get_string(),
@@ -890,7 +916,7 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
           } else if (UseInstrMode) {
             int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
                   : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
-                  (text_val, instr_info);
+                  (text_val, instr_info, string_searcher);
             res_datums[i].set_int(res);
           } else {
             res_datums[i].set_int(ObNonInstrModeMatcher()(coll_type, text_val,
@@ -913,7 +939,7 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
             if (UseInstrMode) {
             int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
                 : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
-                (text_datums[i].get_string(), instr_info);
+                (text_datums[i].get_string(), instr_info, string_searcher);
               res_datums[i].set_int(res);
             } else {
               res_datums[i].set_int(ObNonInstrModeMatcher()(coll_type, text_datums[i].get_string(),
@@ -933,7 +959,7 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
               if (UseInstrMode) {
                 int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
                     : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
-                    (text_val, instr_info);
+                    (text_val, instr_info, string_searcher);
                 res_datums[i].set_int(res);
               } else {
                 res_datums[i].set_int(ObNonInstrModeMatcher()(coll_type, text_val,
@@ -952,7 +978,7 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
 template <typename TextVec, typename ResVec, bool NullCheck, bool UseInstrMode, INSTR_MODE InstrMode>
 int ObExprLike::match_text_vector(VECTOR_EVAL_FUNC_ARG_DECL, const ObCollationType coll_type,
                                   const int32_t escape_wc, const ObString &pattern_val,
-                                  const InstrInfo instr_info)
+                                  const InstrInfo instr_info, const StringSearcher &string_searcher)
 {
   int ret = OB_SUCCESS;
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
@@ -968,7 +994,7 @@ int ObExprLike::match_text_vector(VECTOR_EVAL_FUNC_ARG_DECL, const ObCollationTy
         if (UseInstrMode) {
           int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
                   : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
-                  (text_vec->get_string(i), instr_info);
+                  (text_vec->get_string(i), instr_info, string_searcher);
           res_vec->set_int(i, res);
         } else {
           res_vec->set_int(i, ObNonInstrModeMatcher()(coll_type, text_vec->get_string(i),
@@ -988,7 +1014,7 @@ int ObExprLike::match_text_vector(VECTOR_EVAL_FUNC_ARG_DECL, const ObCollationTy
         } else if (UseInstrMode) {
           int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
                 : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
-                (text_val, instr_info);
+                (text_val, instr_info, string_searcher);
           res_vec->set_int(i, res);
         } else {
           res_vec->set_int(i, ObNonInstrModeMatcher()(coll_type, text_val,
@@ -1060,6 +1086,7 @@ int ObExprLike::like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
     }
     INSTR_MODE instr_mode = like_ctx->get_instr_mode();
     const InstrInfo instr_info = like_ctx->instr_info_;
+    const StringSearcher &string_searcher = like_ctx->string_searcher_;
     int32_t escape_wc = 0;
     LOG_DEBUG("set instr info inner end", K(coll_type), K(pattern_val), K(instr_mode),
               K(like_ctx->same_as_last));
@@ -1070,7 +1097,7 @@ int ObExprLike::like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ESCAPE");
     } else {
       #define MATCH_TEXT_BATCH_ARG_LIST expr, ctx, skip, size, coll_type, escape_wc, pattern_val, \
-                instr_info
+                instr_info, string_searcher
       // it seems to take a lot of work to make eval_info.notnull_ correct and it may be removed.
       // so null_check variable is not used now, match_text_batch is called always with null check.
       #define CALL_MATCH_TEXT_BATCH(use_instr_mode, instr_mode) \
@@ -1179,6 +1206,7 @@ int ObExprLike::like_text_vectorized_inner_vec2(const ObExpr &expr, ObEvalCtx &c
     }
     INSTR_MODE instr_mode = like_ctx->get_instr_mode();
     const InstrInfo instr_info = like_ctx->instr_info_;
+    const StringSearcher &string_searcher = like_ctx->string_searcher_;
     int32_t escape_wc = 0;
     LOG_DEBUG("set instr info inner end", K(coll_type), K(pattern_val), K(instr_mode),
               K(like_ctx->same_as_last));
@@ -1189,7 +1217,7 @@ int ObExprLike::like_text_vectorized_inner_vec2(const ObExpr &expr, ObEvalCtx &c
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ESCAPE");
     } else {
       #define MATCH_TEXT_VECTOR_ARG_LIST expr, ctx, skip, bound, coll_type, escape_wc, pattern_val, \
-                instr_info
+                instr_info, string_searcher
       // it seems to take a lot of work to make eval_info.notnull_ correct and it may be removed.
       // so null_check variable is not used now, match_text_batch is called always with null check.
       #define CALL_MATCH_TEXT_VECTOR(use_instr_mode, instr_mode) \
