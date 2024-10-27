@@ -64,6 +64,7 @@ build_errsim
 build_release
 build_version.c
 build_version.cpp
+tmp
 compile
 config.guess
 config.log
