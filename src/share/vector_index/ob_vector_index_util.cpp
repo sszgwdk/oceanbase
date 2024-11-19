@@ -40,7 +40,7 @@ int ObVectorIndexUtil::parser_params_from_string(
   } else {
     const int64_t default_m_value = 16;
     const int64_t default_ef_construction_value = 200;
-    const int64_t default_ef_search_value = 64;
+    const int64_t default_ef_search_value = 32;
     const ObVectorIndexAlgorithmLib default_lib = ObVectorIndexAlgorithmLib::VIAL_VSAG;
 
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_param_strs.count(); ++i) {
@@ -120,6 +120,11 @@ int ObVectorIndexUtil::parser_params_from_string(
       if (param.ef_search_ == 0) { param.ef_search_ = default_ef_search_value; }
       if (param.lib_ == ObVectorIndexAlgorithmLib::VIAL_MAX) { param.lib_ = default_lib; }
       param.dim_ = 0; // TODO@xiajin: fill dim
+
+      // wk: test 硬编码参数
+      param.m_ = 10;
+      param.ef_construction_ = 400;
+      param.ef_search_ = 28;
     }
     LOG_DEBUG("parser vector index param", K(ret), K(index_param_str), K(param));
   }

@@ -45,8 +45,8 @@ ExternalProject_Add(
     LOG_BUILD TRUE
     LOG_INSTALL TRUE
     DOWNLOAD_NO_PROGRESS 0
-    INACTIVITY_TIMEOUT 5
-    TIMEOUT 150
+    INACTIVITY_TIMEOUT 20
+    TIMEOUT 600
 )
 
 ExternalProject_Add_Step(${name} setup-compiler
