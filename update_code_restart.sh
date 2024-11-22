@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 重新编译 + 切换二进制文件
-bash build.sh release --init --make -j16
+bash build.sh release --make -j16
 
 # 切换二进制文件
 ./tools/deploy/obd.sh stop -n obcluster

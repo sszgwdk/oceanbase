@@ -313,6 +313,9 @@ int get_index_number(VectorIndexPtr& index_handler, int64_t &size) {
 int knn_search(VectorIndexPtr& index_handler,float* query_vector,int dim, int64_t topk,
                const float*& dist, const int64_t*& ids, int64_t &result_size, int ef_search,
                void* invalid) {
+    // wk: 硬编码
+    ef_search = 80;
+
     vsag::logger::debug("TRACE LOG[knn_search]:");
     vsag::ErrorType error = vsag::ErrorType::UNKNOWN_ERROR;
     int ret = 0;
