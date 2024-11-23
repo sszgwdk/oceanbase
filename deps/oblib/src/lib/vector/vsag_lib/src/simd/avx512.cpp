@@ -34,6 +34,7 @@ L2SqrSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_p
     const float* pEnd1 = pVect1 + (qty16 << 4);
 
     __m512 diff, v1, v2;
+    // whp 
     __m512 sum = _mm512_set1_ps(0);
 
     while (pVect1 < pEnd1) {
@@ -42,8 +43,9 @@ L2SqrSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_p
         v2 = _mm512_loadu_ps(pVect2);
         pVect2 += 16;
         diff = _mm512_sub_ps(v1, v2);
-        // sum = _mm512_fmadd_ps(diff, diff, sum);
-        sum = _mm512_add_ps(sum, _mm512_mul_ps(diff, diff));
+        // whp
+        sum = _mm512_fmadd_ps(diff, diff, sum);
+        // sum = _mm512_add_ps(sum, _mm512_mul_ps(diff, diff));
     }
 
     _mm512_store_ps(TmpRes, sum);
