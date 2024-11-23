@@ -22,7 +22,7 @@ namespace vsag {
 
 #define PORTABLE_ALIGN32 __attribute__((aligned(32)))
 #define PORTABLE_ALIGN64 __attribute__((aligned(64)))
-
+/*
 float
 L2SqrSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_ptr) {
     float* pVect1 = (float*)pVect1v;
@@ -52,7 +52,25 @@ L2SqrSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_p
                 TmpRes[13] + TmpRes[14] + TmpRes[15];
 
     return (res);
+}*/
+
+float L2SqrSIMD16ExtAVX512(const void* pVect1, const void* pVect2, const void* qty_ptr) {
+    float PORTABLE_ALIGN64 TmpRes[16];
+    __m512 sum = _mm512_setzero_ps();  // 初始化累加和为零
+
+    // 主循环：处理每组 16 个浮点数
+    for (int i = 0; i < 8; ++i) {  // 128 / 16 = 8
+        __m512 v1 = _mm512_loadu_ps((float*)pVect1 + i * 16);
+        __m512 v2 = _mm512_loadu_ps((float*)pVect2 + i * 16);
+        __m512 diff = _mm512_sub_ps(v1, v2);
+        sum = _mm512_fmadd_ps(diff, diff, sum);  // 使用融合乘加指令
+    }
+
+    float res = _mm512_reduce_add_ps(sum);
+
+    return res;
 }
+
 
 float
 InnerProductSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_ptr) {
