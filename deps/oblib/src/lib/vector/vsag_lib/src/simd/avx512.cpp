@@ -23,8 +23,7 @@ namespace vsag {
 #define PORTABLE_ALIGN32 __attribute__((aligned(32)))
 #define PORTABLE_ALIGN64 __attribute__((aligned(64)))
 /*
-float
-L2SqrSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_ptr) {
+float L2SqrSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_ptr) {
     float* pVect1 = (float*)pVect1v;
     float* pVect2 = (float*)pVect2v;
     size_t qty = *((size_t*)qty_ptr);
@@ -52,7 +51,8 @@ L2SqrSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_p
                 TmpRes[13] + TmpRes[14] + TmpRes[15];
 
     return (res);
-}*/
+}
+*/
 
 float L2SqrSIMD16ExtAVX512(const void* pVect1, const void* pVect2, const void* qty_ptr) {
     float PORTABLE_ALIGN64 TmpRes[16];

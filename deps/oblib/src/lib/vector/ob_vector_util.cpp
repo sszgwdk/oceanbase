@@ -100,6 +100,7 @@ int create_index(obvectorlib::VectorIndexPtr& index_handler, int index_type,
   return ret;
 #else
   obvectorlib::set_block_size_limit(2*1024*1024);
+  LOG_DEBUG("lmw obvectorutil.cpp : create_index");
   return obvectorlib::create_index(index_handler,
                                    static_cast<obvectorlib::IndexType>(index_type),
                                    dtype, metric,
@@ -117,6 +118,7 @@ int build_index(obvectorlib::VectorIndexPtr index_handler, float* vector_list, i
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
     return ret;
 #else
+    LOG_DEBUG("lmw obvectorutil.cpp : build_index");
   return obvectorlib::build_index(index_handler, vector_list, ids, dim, size);
 #endif
 
@@ -128,6 +130,7 @@ int add_index(obvectorlib::VectorIndexPtr index_handler, float* vector_list, int
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
   return ret;
 #else
+    LOG_DEBUG("lmw obvectorutil.cpp : add_index");
   return obvectorlib::add_index(index_handler, vector_list, ids, dim, size);
 #endif
 }
@@ -150,6 +153,7 @@ int knn_search(obvectorlib::VectorIndexPtr index_handler, float* query_vector,in
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
   return ret;
 #else
+    LOG_DEBUG("lmw obvectorutil.cpp : knn_search");
   return obvectorlib::knn_search(index_handler, query_vector, dim, topk,
                                  result_dist, result_ids, result_size,
                                  ef_search, invalid);
@@ -162,6 +166,7 @@ int fserialize(obvectorlib::VectorIndexPtr index_handler, std::ostream& out_stre
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
     return ret;
 #else
+    LOG_DEBUG("lmw obvectorutil.cpp : fserialize");
     return obvectorlib::fserialize(index_handler, out_stream);
 #endif
 }
@@ -172,6 +177,7 @@ int fdeserialize(obvectorlib::VectorIndexPtr& index_handler, std::istream& in_st
 #ifdef OB_BUILD_CDC_DISABLE_VSAG
     return ret;
 #else
+    LOG_DEBUG("lmw obvectorutil.cpp : fdeserialize");
     return obvectorlib::fdeserialize(index_handler,in_stream);
 #endif
 }

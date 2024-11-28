@@ -723,7 +723,7 @@ public:
             queue_closest.emplace(-top_candidates.top().first, top_candidates.top().second);
             top_candidates.pop();
         }
-
+  
         while (queue_closest.size()) {
             if (return_list.size() >= M)
                 break;
