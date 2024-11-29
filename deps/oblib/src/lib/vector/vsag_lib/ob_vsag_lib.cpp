@@ -213,7 +213,8 @@ int create_index(VectorIndexPtr& index_handler, IndexType index_type,
     if (is_support) {
         // create index
         std::shared_ptr<vsag::Index> hnsw;
-        bool use_static = false;
+        // whp，原 false
+        bool use_static = true;
         nlohmann::json hnsw_parameters{{"max_degree", max_degree},
                                 {"ef_construction", ef_construction},
                                 {"ef_search", ef_search},
