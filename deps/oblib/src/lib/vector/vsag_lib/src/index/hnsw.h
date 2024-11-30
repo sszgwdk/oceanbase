@@ -39,6 +39,9 @@
 #include "vsag/readerset.h"
 
 namespace vsag {
+// whp, from vsag/data_type.h
+enum class DataTypes { DATA_TYPE_FLOAT = 0, DATA_TYPE_INT8 = 1, DATA_TYPE_FP16 = 2 };
+
 class BitsetOrCallbackFilter : public hnswlib::BaseFilterFunctor {
 public:
     BitsetOrCallbackFilter(const std::function<bool(int64_t)>& func) : func_(func) {
@@ -70,6 +73,15 @@ public:
     HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
          int M,
          int ef_construction,
+         bool use_static = false,
+         bool use_reversed_edges = false,
+         bool use_conjugate_graph = false,
+         bool normalize = false,
+         Allocator* allocator = nullptr);
+    HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
+         int M,
+         int ef_construction,
+         DataTypes type = DataTypes::DATA_TYPE_FLOAT,
          bool use_static = false,
          bool use_reversed_edges = false,
          bool use_conjugate_graph = false,
@@ -280,6 +292,9 @@ private:
     tl::expected<bool, Error>
     init_memory_space();
 
+    void
+    get_vectors(const DatasetPtr& base, void** vectors_ptr, size_t* data_size_ptr) const;
+
     BinarySet
     empty_binaryset() const;
 
@@ -295,6 +310,7 @@ private:
     bool empty_index_ = false;
     bool use_reversed_edges_ = false;
     bool is_init_memory_ = false;
+    DataTypes type_ = DataTypes::DATA_TYPE_FLOAT;
 
     std::shared_ptr<SafeAllocator> allocator_;
 

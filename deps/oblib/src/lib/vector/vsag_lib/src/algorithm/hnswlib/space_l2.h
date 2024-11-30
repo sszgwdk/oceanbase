@@ -14,6 +14,7 @@
 // limitations under the License.
 
 #pragma once
+#include "../../simd/simd.h"
 #include "hnswlib.h"
 
 namespace vsag {

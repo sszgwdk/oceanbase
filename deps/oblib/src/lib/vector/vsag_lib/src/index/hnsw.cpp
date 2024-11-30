@@ -98,6 +98,61 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
             Options::Instance().block_size_limit());
     }
 }
+HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
+           int M,
+           int ef_construction,
+           DataTypes type,
+           bool use_static,
+           bool use_reversed_edges,
+           bool use_conjugate_graph,
+           bool normalize,
+           Allocator* allocator)
+    : space(std::move(space_interface)),
+      use_static_(use_static),
+      use_conjugate_graph_(use_conjugate_graph),
+      use_reversed_edges_(use_reversed_edges),
+      type_(type) {
+    dim_ = *((size_t*)space->get_dist_func_param());
+
+    M = std::min(std::max(M, MINIMAL_M), MAXIMAL_M);
+
+    if (ef_construction <= 0) {
+        throw std::runtime_error(MESSAGE_PARAMETER);
+    }
+
+    if (use_conjugate_graph) {
+        conjugate_graph_ = std::make_shared<ConjugateGraph>();
+    }
+
+    if (not allocator) {
+        allocator = DefaultAllocator::Instance();
+    }
+    allocator_ = std::shared_ptr<SafeAllocator>(new SafeAllocator(allocator));
+
+    if (!use_static_) {
+        alg_hnsw =
+            std::make_shared<hnswlib::HierarchicalNSW>(space.get(),
+                                                       DEFAULT_MAX_ELEMENT,
+                                                       allocator_.get(),
+                                                       M,
+                                                       ef_construction,
+                                                       use_reversed_edges_,
+                                                       normalize,
+                                                       Options::Instance().block_size_limit());
+    } else {
+        if (dim_ % 4 != 0) {
+            // FIXME(wxyu): remove throw stmt from construct function
+            throw std::runtime_error("cannot build static hnsw while dim % 4 != 0");
+        }
+        alg_hnsw = std::make_shared<hnswlib::StaticHierarchicalNSW>(
+            space.get(),
+            DEFAULT_MAX_ELEMENT,
+            allocator_.get(),
+            M,
+            ef_construction,
+            Options::Instance().block_size_limit());
+    }
+}
 
 tl::expected<std::vector<int64_t>, Error>
 HNSW::build(const DatasetPtr& base) {
@@ -121,13 +176,17 @@ HNSW::build(const DatasetPtr& base) {
         }
 
         auto ids = base->GetIds();
-        auto vectors = base->GetFloat32Vectors();
+        // auto vectors = base->GetFloat32Vectors();
+        void* vectors = nullptr;
+        size_t data_size = 0;
+        get_vectors(base, &vectors, &data_size);
         std::vector<int64_t> failed_ids;
         {
             SlowTaskTimer t("hnsw graph");
             for (int64_t i = 0; i < num_elements; ++i) {
                 // noexcept runtime
-                if (!alg_hnsw->addPoint((const void*)(vectors + i * dim_), ids[i])) {
+                // if (!alg_hnsw->addPoint((const void*)(vectors + i * dim_), ids[i])) {
+                if (!alg_hnsw->addPoint((const void*)((char*)vectors + data_size * i), ids[i])) {
                     logger::debug("duplicate point: {}", ids[i]);
                     failed_ids.emplace_back(ids[i]);
                 }
@@ -162,7 +221,10 @@ HNSW::add(const DatasetPtr& base) {
 
         int64_t num_elements = base->GetNumElements();
         auto ids = base->GetIds();
-        auto vectors = base->GetFloat32Vectors();
+        // auto vectors = base->GetFloat32Vectors();
+        void* vectors = nullptr;
+        size_t data_size = 0;
+        get_vectors(base, &vectors, &data_size);
         std::vector<int64_t> failed_ids;
 
         std::unique_lock lock(rw_mutex_);
@@ -171,7 +233,8 @@ HNSW::add(const DatasetPtr& base) {
         }
         for (int64_t i = 0; i < num_elements; ++i) {
             // noexcept runtime
-            if (!alg_hnsw->addPoint((const void*)(vectors + i * dim_), ids[i])) {
+            // if (!alg_hnsw->addPoint((const void*)(vectors + i * dim_), ids[i])) {
+            if (!alg_hnsw->addPoint((const void*)((char*)vectors + data_size * i), ids[i])) {
                 logger::debug("duplicate point: {}", i);
                 failed_ids.push_back(ids[i]);
             }
@@ -215,7 +278,10 @@ HNSW::knn_search(const DatasetPtr& query,
 
         // check query vector
         CHECK_ARGUMENT(query->GetNumElements() == 1, "query dataset should contain 1 vector only");
-        auto vector = query->GetFloat32Vectors();
+        // auto vector = query->GetFloat32Vectors();
+        void* vector = nullptr;
+        size_t data_size = 0;
+        get_vectors(query, &vector, &data_size);
         int64_t query_dim = query->GetDim();
         CHECK_ARGUMENT(
             query_dim == dim_,
@@ -333,7 +399,10 @@ HNSW::range_search(const DatasetPtr& query,
 
         // check query vector
         CHECK_ARGUMENT(query->GetNumElements() == 1, "query dataset should contain 1 vector only");
-        auto vector = query->GetFloat32Vectors();
+        // auto vector = query->GetFloat32Vectors();
+        void* vector = nullptr;
+        size_t data_size = 0;
+        get_vectors(query, &vector, &data_size);
         int64_t query_dim = query->GetDim();
         CHECK_ARGUMENT(
             query_dim == dim_,
@@ -800,6 +869,19 @@ HNSW::init_memory_space() {
     }
     is_init_memory_ = true;
     return true;
+}
+
+void
+HNSW::get_vectors(const vsag::DatasetPtr& base, void** vectors_ptr, size_t* data_size_ptr) const {
+    if (type_ == DataTypes::DATA_TYPE_FLOAT) {
+        *vectors_ptr = (void*)base->GetFloat32Vectors();
+        *data_size_ptr = dim_ * sizeof(float);
+    } else if (type_ == DataTypes::DATA_TYPE_INT8) {
+        *vectors_ptr = (void*)base->GetInt8Vectors();
+        *data_size_ptr = dim_ * sizeof(int8_t);
+    } else {
+        throw std::invalid_argument(fmt::format("no support for this metric: {}", (int)type_));
+    }
 }
 
 }  // namespace vsag

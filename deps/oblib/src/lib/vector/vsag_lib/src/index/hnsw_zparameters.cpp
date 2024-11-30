@@ -30,19 +30,36 @@ CreateHnswParameters::FromJson(const std::string& json_string) {
 
     CHECK_ARGUMENT(params.contains(PARAMETER_DTYPE),
                    fmt::format("parameters must contains {}", PARAMETER_DTYPE));
-    CHECK_ARGUMENT(
-        params[PARAMETER_DTYPE] == DATATYPE_FLOAT32,
-        fmt::format("parameters[{}] supports {} only now", PARAMETER_DTYPE, DATATYPE_FLOAT32));
+    // CHECK_ARGUMENT(
+    //     params[PARAMETER_DTYPE] == DATATYPE_FLOAT32,
+    //     fmt::format("parameters[{}] supports {} only now", PARAMETER_DTYPE, DATATYPE_FLOAT32));
+    CreateHnswParameters obj;
+    if (params[PARAMETER_DTYPE] == DATATYPE_FLOAT32) {
+        obj.type = DataTypes::DATA_TYPE_FLOAT;
+    } else if (params[PARAMETER_DTYPE] == DATATYPE_INT8) {
+        obj.type = DataTypes::DATA_TYPE_INT8;
+    } else {
+        throw std::invalid_argument(fmt::format("parameters[{}] supports {}, {} only now",
+                                                PARAMETER_DTYPE,
+                                                DATATYPE_FLOAT32,
+                                                DATATYPE_INT8));
+    }
+
     CHECK_ARGUMENT(params.contains(PARAMETER_METRIC_TYPE),
                    fmt::format("parameters must contains {}", PARAMETER_METRIC_TYPE));
     CHECK_ARGUMENT(params.contains(PARAMETER_DIM),
                    fmt::format("parameters must contains {}", PARAMETER_DIM));
 
-    CreateHnswParameters obj;
+    // CreateHnswParameters obj;
 
     // set obj.space
     CHECK_ARGUMENT(params.contains(INDEX_HNSW),
                    fmt::format("parameters must contains {}", INDEX_HNSW));
+    if (obj.type == DataTypes::DATA_TYPE_INT8 && params[PARAMETER_METRIC_TYPE] != METRIC_IP) {
+        throw std::invalid_argument(fmt::format(
+            "no support for INT8 when using {}, {} as metric", METRIC_L2, METRIC_COSINE));
+    }
+
     if (params[PARAMETER_METRIC_TYPE] == METRIC_L2) {
         obj.space = std::make_shared<hnswlib::L2Space>(params[PARAMETER_DIM]);
     } else if (params[PARAMETER_METRIC_TYPE] == METRIC_IP) {
@@ -127,6 +144,7 @@ CreateFreshHnswParameters::FromJson(const std::string& json_string) {
     obj.space = parrent_obj.space;
     obj.use_static = false;
     obj.normalize = parrent_obj.normalize;
+    obj.type = parrent_obj.type;
 
     // set obj.use_reversed_edges
     obj.use_reversed_edges = true;

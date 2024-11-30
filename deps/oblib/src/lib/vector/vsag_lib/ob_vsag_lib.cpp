@@ -213,13 +213,15 @@ int create_index(VectorIndexPtr& index_handler, IndexType index_type,
     if (is_support) {
         // create index
         std::shared_ptr<vsag::Index> hnsw;
-        // whp，原 false
-        bool use_static = true;
+        // whp，参数硬编码
+        bool use_static = false;
+        const char * data_type = "int8";
+
         nlohmann::json hnsw_parameters{{"max_degree", max_degree},
                                 {"ef_construction", ef_construction},
                                 {"ef_search", ef_search},
                                 {"use_static", use_static}};
-        nlohmann::json index_parameters{{"dtype", dtype}, {"metric_type", metric}, {"dim", dim}, {"hnsw", hnsw_parameters}}; 
+        nlohmann::json index_parameters{{"dtype", data_type}, {"metric_type", metric}, {"dim", dim}, {"hnsw", hnsw_parameters}}; 
         if (auto index = vsag::Factory::CreateIndex("hnsw", index_parameters.dump(), vsag_allocator);
             index.has_value()) {
             hnsw = index.value();
