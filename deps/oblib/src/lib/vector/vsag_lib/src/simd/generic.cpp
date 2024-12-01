@@ -33,14 +33,15 @@ namespace vsag {
 //     }
 //     return (res);
 // }
-float
-L2Sqr(const void* pVect1v, const void* pVect2v, const void* qty_ptr) {
+
+#pragma GCC optimize ("O3")
+float L2Sqr(const void* pVect1v, const void* pVect2v, const void* qty_ptr) {
     uint8_t* pVect1 = (uint8_t*)pVect1v;
     uint8_t* pVect2 = (uint8_t*)pVect2v;
-    size_t qty = *((size_t*)qty_ptr);
+    // size_t qty = *((size_t*)qty_ptr);
 
     int res = 0;
-    for (size_t i = 0; i < qty; i++) {
+    for (size_t i = 0; i < 128; i++) {
         int t = *pVect1 - *pVect2;
         pVect1++;
         pVect2++;
