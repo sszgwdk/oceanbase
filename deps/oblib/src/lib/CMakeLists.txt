@@ -432,13 +432,23 @@ else()
   set(FMT_STATIC "libfmt.a")
 endif ()
 
+find_library(LIBSIMD_PATH libsimd.a
+    PATHS ../../../../build_release/deps/oblib/src/lib/vector/vsag_lib/src/simd
+    NO_DEFAULT_PATH
+)
+if(LIBSIMD_PATH)
+    message(STATUS  "Found libsimd.a at: ${LIBSIMD_PATH}")
+else()
+    message(FATAL_ERROR "Could not find libsimd.a")
+endif()
+
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
 if (NOT OB_BUILD_VSAG_RPM)
   target_link_libraries(oblib_lib
     PUBLIC
     libob_vsag_static_test.a
     libcpuinfo.a
-    libsimd.a
+    ${LIBSIMD_PATH}
     libvsag_static_test.a
     libdiskann.a
     libopenblas.a

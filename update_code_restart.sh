@@ -1,8 +1,12 @@
 #!/bin/bash
 
 # 重新编译 + 切换二进制文件
-bash build.sh release --make -j2
+# bash build.sh release --make -j2
+sleep 2
 cp ./build_release/deps/oblib/src/lib/vector/vsag_lib/src/simd/libsimd.a ./deps/3rd/usr/local/oceanbase/deps/devel/lib/vsag_lib/libsimd.a
+sleep 2
+bash build.sh release --make -j2
+sleep 2
 
 # 切换二进制文件
 ./tools/deploy/obd.sh stop -n obcluster
