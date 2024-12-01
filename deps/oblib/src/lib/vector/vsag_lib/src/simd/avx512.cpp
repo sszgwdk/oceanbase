@@ -94,6 +94,53 @@ L2SqrSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_p
     return res;
 }
 
+float 
+INT8L2Sqr512AVX512(const void* pVect1v, const void* pVect2v, const void* qty_ptr) {
+    __mmask32 mask = 0xFFFFFFFF;
+    __mmask64 mask64 = 0xFFFFFFFFFFFFFFFF;
+
+    size_t qty = *((size_t*)qty_ptr);
+    uint32_t cTmp[16];
+
+    uint8_t* pVect1 = (uint8_t*)pVect1v;
+    uint8_t* pVect2 = (uint8_t*)pVect2v;
+    const uint8_t* pEnd1 = pVect1 + qty;
+    
+    __m512i sum512 = _mm512_set1_epi32(0);
+
+    while (pVect1 < pEnd1) {
+        // 加载 32 个 int8_t 到 __m256i 寄存器
+        __m256i v1 = _mm256_maskz_loadu_epi8(mask, pVect1);
+        __m256i v2 = _mm256_maskz_loadu_epi8(mask, pVect2);
+
+        // 计算差值
+        __m256i diff = _mm256_sub_epi8(v1, v2);
+
+        // 将差值扩展为 16 位整数
+        __m512i diff_16 = _mm512_cvtepi8_epi16(diff);
+
+        // 计算平方
+        __m512i diff_sq = _mm512_mullo_epi16(diff_16, diff_16);
+
+        // 累加结果
+        sum512 = _mm512_add_epi32(sum512, diff_sq);
+
+        // 移动指针
+        pVect1 += 32;
+        pVect2 += 32;
+    }
+
+    // 将累加结果从 AVX512 寄存器中提取出来
+    _mm512_mask_storeu_epi32(cTmp, mask64, sum512);
+
+    double res = 0;
+    for (int i = 0; i < 16; i++) {
+        res += cTmp[i];
+    }
+
+    return (float)res;
+}
+
 float
 InnerProductSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_ptr) {
     float PORTABLE_ALIGN64 TmpRes[16];
