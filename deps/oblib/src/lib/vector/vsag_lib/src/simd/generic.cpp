@@ -18,31 +18,32 @@
 
 namespace vsag {
 
-float
-SQ4ComputeCodesL2Sqr(const uint8_t* codes1,
-                     const uint8_t* codes2,
-                     const float* lower_bound,
-                     const float* diff,
-                     uint64_t dim) {
-    float result = 0, delta = 0;
-    float x_lo = 0, x_hi = 0, y_lo = 0, y_hi = 0;
+// lmw
+// float
+// SQ4ComputeCodesL2Sqr(const uint8_t* codes1,
+//                      const uint8_t* codes2,
+//                      const float* lower_bound,
+//                      const float* diff,
+//                      uint64_t dim) {
+//     float result = 0, delta = 0;
+//     float x_lo = 0, x_hi = 0, y_lo = 0, y_hi = 0;
 
-    for (uint64_t d = 0; d < dim; d += 2) {
-        x_lo = (codes1[d >> 1] & 0x0f) / 15.0 * diff[d] + lower_bound[d];
-        y_lo = (codes2[d >> 1] & 0x0f) / 15.0 * diff[d] + lower_bound[d];
-        if (d + 1 < dim) {
-            x_hi = ((codes1[d >> 1] & 0xf0) >> 4) / 15.0 * diff[d] + lower_bound[d];
-            y_hi = ((codes2[d >> 1] & 0xf0) >> 4) / 15.0 * diff[d] + lower_bound[d];
-        } else {
-            x_hi = 0;
-            y_hi = 0;
-        }
+//     for (uint64_t d = 0; d < dim; d += 2) {
+//         x_lo = (codes1[d >> 1] & 0x0f) / 15.0 * diff[d] + lower_bound[d];
+//         y_lo = (codes2[d >> 1] & 0x0f) / 15.0 * diff[d] + lower_bound[d];
+//         if (d + 1 < dim) {
+//             x_hi = ((codes1[d >> 1] & 0xf0) >> 4) / 15.0 * diff[d] + lower_bound[d];
+//             y_hi = ((codes2[d >> 1] & 0xf0) >> 4) / 15.0 * diff[d] + lower_bound[d];
+//         } else {
+//             x_hi = 0;
+//             y_hi = 0;
+//         }
 
-        result += (x_lo - y_lo) * (x_lo - y_lo) + (x_hi - y_hi) * (x_hi - y_hi);
-    }
+//         result += (x_lo - y_lo) * (x_lo - y_lo) + (x_hi - y_hi) * (x_hi - y_hi);
+//     }
 
-    return result;
-}
+//     return result;
+// }
 
 
 float

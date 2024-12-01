@@ -1,4 +1,4 @@
 #ifndef VSAG_VERSION_H_
 #define VSAG_VERSION_H_
-#define VSAG_VERSION "90883d05e2-dirty"
+#define VSAG_VERSION "b69a9071ef-dirty"
 #endif  /* VSAG_VERSION_H_ */
