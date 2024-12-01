@@ -20,6 +20,7 @@
 
 #include "hnsw.h"
 #include "../algorithm/hnswlib/hnswlib.h"
+#include "../data_type.h"
 
 namespace vsag {
 

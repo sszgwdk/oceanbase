@@ -1555,6 +1555,7 @@ public:
         }
 
         std::shared_ptr<float[]> normalize_data;
+        // wk: 默认不进行归一化
         normalize_vector(data_point, normalize_data);
 
         std::unique_lock<std::recursive_mutex> lock_el(link_list_locks_[cur_c]);

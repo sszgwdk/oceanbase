@@ -20,6 +20,7 @@
 #include <nlohmann/json.hpp>
 
 #include "../common.h"
+#include "../data_type.h"
 #include "vsag/constants.h"
 
 namespace vsag {
@@ -38,6 +39,8 @@ CreateHnswParameters::FromJson(const std::string& json_string) {
         obj.type = DataTypes::DATA_TYPE_FLOAT;
     } else if (params[PARAMETER_DTYPE] == DATATYPE_INT8) {
         obj.type = DataTypes::DATA_TYPE_INT8;
+    } else if (params[PARAMETER_DTYPE] == DATATYPE_UINT8) {
+        obj.type = DataTypes::DATA_TYPE_UINT8;
     } else {
         throw std::invalid_argument(fmt::format("parameters[{}] supports {}, {} only now",
                                                 PARAMETER_DTYPE,
@@ -55,10 +58,12 @@ CreateHnswParameters::FromJson(const std::string& json_string) {
     // set obj.space
     CHECK_ARGUMENT(params.contains(INDEX_HNSW),
                    fmt::format("parameters must contains {}", INDEX_HNSW));
-    if (obj.type == DataTypes::DATA_TYPE_INT8 && params[PARAMETER_METRIC_TYPE] != METRIC_IP) {
-        throw std::invalid_argument(fmt::format(
-            "no support for INT8 when using {}, {} as metric", METRIC_L2, METRIC_COSINE));
-    }
+
+    // wk: l2 也要支持 int8，故注释掉
+    // if (obj.type == DataTypes::DATA_TYPE_INT8 && params[PARAMETER_METRIC_TYPE] != METRIC_IP) {
+    //     throw std::invalid_argument(fmt::format(
+    //         "no support for INT8 when using {}, {} as metric", METRIC_L2, METRIC_COSINE));
+    // }
 
     if (params[PARAMETER_METRIC_TYPE] == METRIC_L2) {
         obj.space = std::make_shared<hnswlib::L2Space>(params[PARAMETER_DIM]);

@@ -30,7 +30,7 @@
 namespace vsag {
 
 class DatasetImpl : public Dataset {
-    using var = std::variant<int64_t, const float*, const int8_t*, const int64_t*>;
+    using var = std::variant<int64_t, const float*, const int8_t*, const uint8_t*, const int64_t*>;
 
 public:
     DatasetImpl() = default;
@@ -44,11 +44,13 @@ public:
             allocator_->Deallocate((void*)this->GetIds());
             allocator_->Deallocate((void*)this->GetDistances());
             allocator_->Deallocate((void*)this->GetInt8Vectors());
+            allocator_->Deallocate((void*)this->GetUInt8Vectors());
             allocator_->Deallocate((void*)this->GetFloat32Vectors());
         } else {
             delete[] this->GetIds();
             delete[] this->GetDistances();
             delete[] this->GetInt8Vectors();
+            delete[] this->GetUInt8Vectors();
             delete[] this->GetFloat32Vectors();
         }
     }
@@ -142,6 +144,22 @@ public:
     GetInt8Vectors() const override {
         if (auto iter = this->data_.find(INT8_VECTORS); iter != this->data_.end()) {
             return std::get<const int8_t*>(iter->second);
+        }
+
+        return nullptr;
+    }
+
+    // wk: add uint8_t vectors
+    DatasetPtr
+    UInt8Vectors(const uint8_t* vectors) override {
+        this->data_[UINT8_VECTORS] = vectors;
+        return shared_from_this();
+    }
+
+    const uint8_t*
+    GetUInt8Vectors() const override {
+        if (auto iter = this->data_.find(UINT8_VECTORS); iter != this->data_.end()) {
+            return std::get<const uint8_t*>(iter->second);
         }
 
         return nullptr;

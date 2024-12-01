@@ -213,9 +213,9 @@ int create_index(VectorIndexPtr& index_handler, IndexType index_type,
     if (is_support) {
         // create index
         std::shared_ptr<vsag::Index> hnsw;
-        // whp，参数硬编码
+        // whp，参数硬编码，固定数据类型为int8
         bool use_static = false;
-        const char * data_type = "int8";
+        const char *data_type = "uint8";
 
         nlohmann::json hnsw_parameters{{"max_degree", max_degree},
                                 {"ef_construction", ef_construction},
@@ -252,6 +252,26 @@ int create_index(VectorIndexPtr& index_handler, IndexType index_type,
     return ret;
 }
 
+// wk: convert float* vector_list to uint8_t* vector_list
+std::shared_ptr<uint8_t> convertFloatVectorToUInt8(const float* vector_list, int dim, int size) {
+    // 检查输入的有效性
+    // if (vector_list == nullptr || dim <= 0 || size <= 0) {
+    //     throw std::invalid_argument("Invalid input arguments.");
+    // }
+
+    int total_elements = dim * size;
+
+    std::shared_ptr<uint8_t> uint8_vector_list(new uint8_t[total_elements], std::default_delete<uint8_t[]>());
+    // TODO(wk): 对齐？
+
+    // 转换float数据到int8_t数据
+    for (int i = 0; i < total_elements; ++i) {
+        uint8_vector_list.get()[i] = static_cast<uint8_t>(vector_list[i]);
+    }
+    return uint8_vector_list;
+}
+
+
 int build_index(VectorIndexPtr& index_handler,float* vector_list, int64_t* ids, int dim, int size) {
     vsag::logger::debug("TRACE LOG[build_index]:");
     vsag::ErrorType error = vsag::ErrorType::UNKNOWN_ERROR;
@@ -263,11 +283,15 @@ int build_index(VectorIndexPtr& index_handler,float* vector_list, int64_t* ids, 
     }
     SlowTaskTimer t("build_index");
     HnswIndexHandler* hnsw = static_cast<HnswIndexHandler*>(index_handler);
+
+    // wk: float* convert to int8_t*
+    std::shared_ptr<uint8_t> uint8_vector_list = convertFloatVectorToUInt8(vector_list, dim, size);
+
     auto dataset = vsag::Dataset::Make();
     dataset->Dim(dim)
     ->NumElements(size)
     ->Ids(ids)
-    ->Float32Vectors(vector_list)
+    ->UInt8Vectors(uint8_vector_list.get())
     ->Owner(false);
     ret = hnsw->build_index(dataset);
     if (ret != 0) {
@@ -288,12 +312,22 @@ int add_index(VectorIndexPtr& index_handler,float* vector, int64_t* ids, int dim
     }
     HnswIndexHandler* hnsw = static_cast<HnswIndexHandler*>(index_handler);
     SlowTaskTimer t("add_index");
+
+    // wk: float* convert to int8_t*
+    std::shared_ptr<uint8_t> uint8_vector = convertFloatVectorToUInt8(vector, dim, size);
+
     // add index
+    // auto incremental = vsag::Dataset::Make();
+    //     incremental->Dim(dim)
+    //         ->NumElements(size)
+    //         ->Ids(ids)
+    //         ->Float32Vectors(vector)
+    //         ->Owner(false);
     auto incremental = vsag::Dataset::Make();
         incremental->Dim(dim)
             ->NumElements(size)
             ->Ids(ids)
-            ->Float32Vectors(vector)
+            ->UInt8Vectors(uint8_vector.get())
             ->Owner(false);
     ret = hnsw->add_index(incremental);
     if (ret != 0) {
@@ -317,7 +351,8 @@ int knn_search(VectorIndexPtr& index_handler,float* query_vector,int dim, int64_
                const float*& dist, const int64_t*& ids, int64_t &result_size, int ef_search,
                void* invalid) {
     // wk: 硬编码
-    ef_search = 80;
+    // TODO(wk): 动态 ef_search
+    ef_search = 150;
 
     vsag::logger::debug("TRACE LOG[knn_search]:");
     vsag::ErrorType error = vsag::ErrorType::UNKNOWN_ERROR;
@@ -334,8 +369,14 @@ int knn_search(VectorIndexPtr& index_handler,float* query_vector,int dim, int64_
     };
     nlohmann::json search_parameters{{"hnsw", {{"ef_search", ef_search}}}};
     HnswIndexHandler* hnsw = static_cast<HnswIndexHandler*>(index_handler);
+
+    // wk: float* convert to int8_t*
+    std::shared_ptr<uint8_t> uint8_query_vector = convertFloatVectorToUInt8(query_vector, dim, 1);
+
     auto query = vsag::Dataset::Make();
-    query->NumElements(1)->Dim(dim)->Float32Vectors(query_vector)->Owner(false);
+    // query->NumElements(1)->Dim(dim)->Float32Vectors(query_vector)->Owner(false);
+    query->NumElements(1)->Dim(dim)->UInt8Vectors(uint8_query_vector.get())->Owner(false);
+
     ret = hnsw->knn_search(query, topk, search_parameters.dump(), dist, ids, result_size, filter);
     if (ret != 0) {
         vsag::logger::error("   knn search error happend, ret={}", ret);
@@ -417,8 +458,10 @@ int fdeserialize(VectorIndexPtr& index_handler, std::istream& in_stream) {
                                 {"ef_construction", ef_construction},
                                 {"ef_search", ef_search},
                                 {"use_static", use_static}};
+
+    // wk: dtype 硬编码为 uint8                            
     nlohmann::json index_parameters{
-        {"dtype", "float32"}, {"metric_type", "l2"}, {"dim", dim}, {"hnsw", hnsw_parameters}};
+        {"dtype", "uint8"}, {"metric_type", "l2"}, {"dim", dim}, {"hnsw", hnsw_parameters}};
     vsag::logger::debug("   Deserilize hnsw index , index parameter:{}, allocator addr:{}",index_parameters.dump(),(void*)hnsw->get_allocator());
     if (auto index = vsag::Factory::CreateIndex("hnsw", index_parameters.dump(), hnsw->get_allocator());
         index.has_value()) {
@@ -479,8 +522,10 @@ int deserialize_bin(VectorIndexPtr& index_handler,const std::string dir) {
                                 {"ef_construction", ef_construction},
                                 {"ef_search", ef_search},
                                 {"use_static", use_static}};
+    
+    // wk: dtype 硬编码为 uint8，初始为 float32
     nlohmann::json index_parameters{
-        {"dtype", "float32"}, {"metric_type", "l2"}, {"dim", dim}, {"hnsw", hnsw_parameters}};
+        {"dtype", "uint8"}, {"metric_type", "l2"}, {"dim", dim}, {"hnsw", hnsw_parameters}};
     vsag::logger::debug("   Deserilize hnsw index , index parameter:{}, allocator addr:{}",index_parameters.dump(),(void*)hnsw->get_allocator());
     std::shared_ptr<vsag::Index> hnsw_index;
     if (auto index = vsag::Factory::CreateIndex("hnsw", index_parameters.dump(),hnsw->get_allocator());

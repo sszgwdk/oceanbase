@@ -27,6 +27,7 @@ const char* const IDS = "ids";
 const char* const DISTS = "dists";
 const char* const FLOAT32_VECTORS = "f32_vectors";
 const char* const INT8_VECTORS = "i8_vectors";
+const char* const UINT8_VECTORS = "u8_vectors";
 const char* const HNSW_DATA = "hnsw_data";
 const char* const CONJUGATE_GRAPH_DATA = "conjugate_graph_data";
 const char* const DISKANN_PQ = "diskann_qp";
@@ -41,6 +42,7 @@ const char* const METRIC_COSINE = "cosine";
 const char* const METRIC_IP = "ip";
 const char* const DATATYPE_FLOAT32 = "float32";
 const char* const DATATYPE_INT8 = "int8";
+const char* const DATATYPE_UINT8 = "uint8";
 const char* const BLANK_INDEX = "blank_index";
 
 // parameters

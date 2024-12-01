@@ -18,21 +18,54 @@
 
 namespace vsag {
 
+// float
+// L2Sqr(const void* pVect1v, const void* pVect2v, const void* qty_ptr) {
+//     float* pVect1 = (float*)pVect1v;
+//     float* pVect2 = (float*)pVect2v;
+//     size_t qty = *((size_t*)qty_ptr);
+
+//     float res = 0;
+//     for (size_t i = 0; i < qty; i++) {
+//         float t = *pVect1 - *pVect2;
+//         pVect1++;
+//         pVect2++;
+//         res += t * t;
+//     }
+//     return (res);
+// }
 float
 L2Sqr(const void* pVect1v, const void* pVect2v, const void* qty_ptr) {
-    float* pVect1 = (float*)pVect1v;
-    float* pVect2 = (float*)pVect2v;
+    uint8_t* pVect1 = (uint8_t*)pVect1v;
+    uint8_t* pVect2 = (uint8_t*)pVect2v;
     size_t qty = *((size_t*)qty_ptr);
 
-    float res = 0;
+    int res = 0;
     for (size_t i = 0; i < qty; i++) {
-        float t = *pVect1 - *pVect2;
+        int t = *pVect1 - *pVect2;
         pVect1++;
         pVect2++;
         res += t * t;
     }
     return (res);
 }
+
+
+// float
+// Int8L2Sqr(const void* pVect1v, const void* pVect2v, const void* qty_ptr) {
+//     int8_t* pVect1 = (int8_t*)pVect1v;
+//     int8_t* pVect2 = (int8_t*)pVect2v;
+//     size_t qty = *((size_t*)qty_ptr);
+
+//     // wk: 也许使用 int 会比 float 快一点，最后能转回来即可
+//     int res = 0;
+//     for (size_t i = 0; i < qty; i++) {
+//         int t = *pVect1 - *pVect2;
+//         pVect1++;
+//         pVect2++;
+//         res += t * t;
+//     }
+//     return (res);
+// }
 
 float
 InnerProduct(const void* pVect1, const void* pVect2, const void* qty_ptr) {

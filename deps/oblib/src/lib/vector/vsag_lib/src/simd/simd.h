@@ -95,6 +95,10 @@ setup_simd();
 float
 L2Sqr(const void* pVect1v, const void* pVect2v, const void* qty_ptr);
 
+// wk: dist func for int8 l2
+// float
+// Int8L2Sqr(const void* pVect1v, const void* pVect2v, const void* qty_ptr);
+
 float
 InnerProduct(const void* pVect1, const void* pVect2, const void* qty_ptr);
 float
@@ -154,6 +158,12 @@ InnerProductSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void
 typedef float (*DistanceFunc)(const void* pVect1, const void* pVect2, const void* qty_ptr);
 DistanceFunc
 GetL2DistanceFunc(size_t dim);
+
+// wk: dist func for uint8 l2
+// 但是加这个函数会报错，直接在GetL2DistanceFunc里面改了
+// DistanceFunc
+// GetInt8L2DistanceFunc(size_t dim);
+
 DistanceFunc
 GetInnerProductDistanceFunc(size_t dim);
 

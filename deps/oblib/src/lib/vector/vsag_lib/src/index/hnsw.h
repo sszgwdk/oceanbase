@@ -33,14 +33,17 @@
 #include "../logger.h"
 #include "../safe_allocator.h"
 #include "../utils.h"
+#include "../data_type.h"
 #include "vsag/binaryset.h"
 #include "vsag/errors.h"
 #include "vsag/index.h"
 #include "vsag/readerset.h"
 
 namespace vsag {
+
+// wk: 新建一个 ../data_type.h
 // whp, from vsag/data_type.h
-enum class DataTypes { DATA_TYPE_FLOAT = 0, DATA_TYPE_INT8 = 1, DATA_TYPE_FP16 = 2 };
+// enum class DataTypes { DATA_TYPE_FLOAT = 0, DATA_TYPE_INT8 = 1, DATA_TYPE_FP16 = 2 };
 
 class BitsetOrCallbackFilter : public hnswlib::BaseFilterFunctor {
 public:

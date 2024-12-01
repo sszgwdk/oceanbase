@@ -69,6 +69,13 @@ public:
     virtual const int8_t*
     GetInt8Vectors() const = 0;
 
+    // wk: add uint8_t vectors
+    virtual DatasetPtr
+    UInt8Vectors(const uint8_t* vectors) = 0;
+
+    virtual const uint8_t*
+    GetUInt8Vectors() const = 0;
+
     virtual DatasetPtr
     Float32Vectors(const float* vectors) = 0;
 

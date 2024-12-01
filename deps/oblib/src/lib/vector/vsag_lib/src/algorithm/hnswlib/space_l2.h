@@ -16,11 +16,16 @@
 #pragma once
 #include "../../simd/simd.h"
 #include "hnswlib.h"
+#include "../../data_type.h"
 
 namespace vsag {
 
 extern hnswlib::DISTFUNC
 GetL2DistanceFunc(size_t dim);
+
+// wk: 这里加函数不知道为什么会报错，直接在GetL2DistanceFunc里面改了
+// extern hnswlib::DISTFUNC
+// GetInt8L2DistanceFunc(size_t dim);
 
 }  // namespace vsag
 
@@ -35,8 +40,28 @@ public:
     L2Space(size_t dim) {
         fstdistfunc_ = vsag::GetL2DistanceFunc(dim);
         dim_ = dim;
-        data_size_ = dim * sizeof(float);
+        // wk: 注意！！！！
+        // data_size_ = dim * sizeof(float);
+        data_size_ = dim * sizeof(uint8_t);
     }
+
+    // wk: GetInt8L2DistanceFunc报错找不到定义
+    // explicit L2Space(size_t dim, vsag::DataTypes dtype)  {
+    //     // fstdistfunc_ = vsag::GetL2DistanceFunc(dim);
+    //     // dim_ = dim;
+    //     // data_size_ = dim * sizeof(float);
+    //     if (dtype == vsag::DataTypes::DATA_TYPE_INT8) {
+    //         fstdistfunc_ = vsag::GetInt8L2DistanceFunc(dim);
+    //         dim_ = dim;
+    //         data_size_ = dim * sizeof(int8_t);
+    //     } else if (dtype == vsag::DataTypes::DATA_TYPE_FLOAT) {
+    //         fstdistfunc_ = vsag::GetL2DistanceFunc(dim);
+    //         dim_ = dim;
+    //         data_size_ = dim * sizeof(float);
+    //     } else {
+    //         throw std::invalid_argument(fmt::format("no support for this metric: {}", (int)dtype));
+    //     }
+    // }
 
     size_t
     get_data_size() override {
