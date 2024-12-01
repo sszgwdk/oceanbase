@@ -61,13 +61,13 @@ void floatVectorToIntVector(const void* fv, int* iv) {
     }
 }
 float L2SqrSIMD16ExtAVX512(const void* pVect1, const void* pVect2, const void* qty_ptr) {
-
+    
     __m512 sum = _mm512_setzero_ps();  // 初始化累加和为零
 
     int* iv1  = (int*)malloc(128 * sizeof(int));
     int* iv2  = (int*)malloc(128 * sizeof(int));
     floatVectorToIntVector(pVect1, iv1);
-    floatVectorToIntVector(pVect1, iv2);
+    floatVectorToIntVector(pVect2, iv2);
 
     for (int i = 0; i < 128; i += 16) {
         // 加载16个整数

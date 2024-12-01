@@ -121,10 +121,10 @@ int ObVectorIndexUtil::parser_params_from_string(
       if (param.lib_ == ObVectorIndexAlgorithmLib::VIAL_MAX) { param.lib_ = default_lib; }
       param.dim_ = 0; // TODO@xiajin: fill dim
 
-      // lmw 
-      param.m_ = 64;
+      // lmw: 硬编码参数
+      param.m_ = 16;
       param.ef_construction_ = 200;
-      param.ef_search_ = 80;
+      param.ef_search_ = 150;
     }
     LOG_DEBUG("parser vector index param", K(ret), K(index_param_str), K(param));
   }
