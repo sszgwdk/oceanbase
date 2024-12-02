@@ -298,6 +298,13 @@ private:
 
     std::shared_ptr<SafeAllocator> allocator_;
 
+    // wk: 用于 hnsw_static 缓存 add 进来的数据
+    int64_t static_vec_num_ = 0;
+    bool is_static_built_ = false;
+    std::vector<float *> static_vec_ptrs_;
+    std::vector<int64_t> static_vec_ids_;
+
+
     mutable std::mutex stats_mutex_;
     mutable std::map<std::string, WindowResultQueue> result_queues_;
 

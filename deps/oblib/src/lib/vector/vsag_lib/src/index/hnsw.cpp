@@ -96,6 +96,10 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
             M,
             ef_construction,
             Options::Instance().block_size_limit());
+        
+        // wk: 
+        static_vec_num_ = 0;
+        is_static_built_ = false;
     }
 }
 
@@ -138,6 +142,9 @@ HNSW::build(const DatasetPtr& base) {
             SlowTaskTimer t("hnsw pq", 1000);
             auto* hnsw = static_cast<hnswlib::StaticHierarchicalNSW*>(alg_hnsw.get());
             hnsw->encode_hnsw_data();
+
+            // wk
+            is_static_built_ = true;
         }
 
         return failed_ids;
@@ -152,8 +159,70 @@ HNSW::add(const DatasetPtr& base) {
     SlowTaskTimer t("hnsw add", 20);
 
     if (use_static_) {
-        LOG_ERROR_AND_RETURNS(ErrorType::UNSUPPORTED_INDEX_OPERATION,
-                              "static index does not support add");
+        // LOG_ERROR_AND_RETURNS(ErrorType::UNSUPPORTED_INDEX_OPERATION,
+        //                       "static index does not support add");
+
+        if (is_static_built_) {
+            LOG_ERROR_AND_RETURNS(ErrorType::UNSUPPORTED_INDEX_OPERATION,
+                                  "static index has been built, cannot add more data");
+        }
+
+        // wk：
+        // 缓存 add 进来的 vectors 和 ids，到达一定数目后进行build
+        // 这样就可以利用到现有的 hnsw_static 实现的 BSA 剪枝
+        auto base_dim = base->GetDim();
+        CHECK_ARGUMENT(base_dim == dim_,
+                       fmt::format("base.dim({}) must be equal to index.dim({})", base_dim, dim_));
+
+        int64_t num_elements = base->GetNumElements();
+        auto ids = base->GetIds();    // 返回 const int64_t*
+        auto vectors = base->GetFloat32Vectors();   // 返回 const float*
+
+        std::vector<int64_t> failed_ids;
+        std::unique_lock lock(rw_mutex_);
+        // 拷贝数据
+        static_vec_num_ += num_elements;
+        for (int64_t i = 0; i < num_elements; ++i) {
+            static_vec_ids_.push_back(ids[i]);
+            float* vec = (float*)allocator_->Allocate(dim_ * sizeof(float));
+            // std::copy(vectors + i * dim_, vectors + (i + 1) * dim_, vec);
+            memcpy(vec, vectors + i * dim_, dim_ * sizeof(float));
+            static_vec_ptrs_.push_back(vec);
+        }
+
+        // 如果 static_vec_num_ 超过一定数目，则参考build进行索引构建
+        if (static_vec_num_ >= 1000000) {
+            if (auto result = init_memory_space(); not result.has_value()) {
+                return tl::unexpected(result.error());
+            }
+
+            {
+                SlowTaskTimer t("hnsw graph");
+                for (int64_t i = 0; i < static_vec_ptrs_.size(); ++i) {
+                    // noexcept runtime
+                    if (!alg_hnsw->addPoint((const void*)(static_vec_ptrs_[i]), static_vec_ids_[i])) {
+                        logger::debug("duplicate point: {}", static_vec_ids_[i]);
+                        failed_ids.emplace_back(static_vec_ids_[i]);
+                    }
+                }
+            }
+
+            if (use_static_) {
+                SlowTaskTimer t("hnsw pq", 1000);
+                auto* hnsw = static_cast<hnswlib::StaticHierarchicalNSW*>(alg_hnsw.get());
+                hnsw->encode_hnsw_data();
+            }
+
+            // 释放缓存的 vectors
+            static_vec_ids_.clear();
+            for (int64_t i = 0; i < static_vec_ptrs_.size(); ++i) {
+                allocator_->Deallocate(static_vec_ptrs_[i]);
+            }
+            static_vec_ptrs_.clear();
+            static_vec_num_ = 0;
+            is_static_built_ = true;
+        }
+        return failed_ids;
     }
     try {
         auto base_dim = base->GetDim();
