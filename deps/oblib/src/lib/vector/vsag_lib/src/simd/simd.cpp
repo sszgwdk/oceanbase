@@ -107,7 +107,8 @@ setup_simd() {
 #ifndef ENABLE_AVX512
     }
 #else
-        // L2SqrSIMD16Ext = L2SqrSIMD16ExtAVX512;
+        // 目前仅支持AVX512
+        L2SqrSIMD16Ext = L2SqrSIMD16ExtAVX512;
         InnerProductSIMD16Ext = InnerProductSIMD16ExtAVX512;
     }
     ret.dist_support_avx512f = true;
@@ -147,7 +148,13 @@ GetPQDistanceFunc() {
 
 DistanceFunc
 GetL2DistanceFunc(size_t dim) {
-    return vsag::L2Sqr;
+    // return vsag::L2Sqr;
+    if (dim % 16 == 0) {
+        return vsag::L2SqrSIMD16Ext;
+    } else {
+        return vsag::L2Sqr;
+    }
+
     // if (dim % 16 == 0) {
     //     return vsag::L2SqrSIMD16Ext;
     // } else if (dim % 4 == 0) {
