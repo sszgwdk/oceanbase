@@ -213,7 +213,8 @@ int create_index(VectorIndexPtr& index_handler, IndexType index_type,
     if (is_support) {
         // create index
         std::shared_ptr<vsag::Index> hnsw;
-        bool use_static = false;
+        // wk：硬编码参数
+        bool use_static = true;
         nlohmann::json hnsw_parameters{{"max_degree", max_degree},
                                 {"ef_construction", ef_construction},
                                 {"ef_search", ef_search},
@@ -314,7 +315,7 @@ int knn_search(VectorIndexPtr& index_handler,float* query_vector,int dim, int64_
                const float*& dist, const int64_t*& ids, int64_t &result_size, int ef_search,
                void* invalid) {
     // wk: 硬编码ef_search
-    ef_search = 150;
+    ef_search = 200;
 
     vsag::logger::debug("TRACE LOG[knn_search]:");
     vsag::ErrorType error = vsag::ErrorType::UNKNOWN_ERROR;
@@ -405,7 +406,9 @@ int fdeserialize(VectorIndexPtr& index_handler, std::istream& in_stream) {
     }
     HnswIndexHandler* hnsw = static_cast<HnswIndexHandler*>(index_handler);
     std::shared_ptr<vsag::Index> hnsw_index;
-    bool use_static = hnsw->get_use_static();
+    // bool use_static = hnsw->get_use_static();
+    // wk: 硬编码 use_static
+    bool use_static = true;
     int max_degree = hnsw->get_max_degree();
     int ef_construction = hnsw->get_ef_construction();
     int ef_search = hnsw->get_ef_search();
@@ -467,7 +470,9 @@ int deserialize_bin(VectorIndexPtr& index_handler,const std::string dir) {
         file.read((char*)b.data.get(), b.size);
         bs.Set(key, b);
     }
-    bool use_static = hnsw->get_use_static();
+    // bool use_static = hnsw->get_use_static();
+    // wk: 硬编码 use_static
+    bool use_static = true;
     int max_degree = hnsw->get_max_degree();
     int ef_construction = hnsw->get_ef_construction();
     int ef_search = hnsw->get_ef_search();

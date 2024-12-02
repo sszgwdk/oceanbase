@@ -204,6 +204,9 @@ HNSW::add(const DatasetPtr& base) {
                         logger::debug("duplicate point: {}", static_vec_ids_[i]);
                         failed_ids.emplace_back(static_vec_ids_[i]);
                     }
+                    // 在过程中 free
+                    allocator_->Deallocate(static_vec_ptrs_[i]);
+                    static_vec_ptrs_[i] = nullptr;
                 }
             }
 
@@ -215,9 +218,6 @@ HNSW::add(const DatasetPtr& base) {
 
             // 释放缓存的 vectors
             static_vec_ids_.clear();
-            for (int64_t i = 0; i < static_vec_ptrs_.size(); ++i) {
-                allocator_->Deallocate(static_vec_ptrs_[i]);
-            }
             static_vec_ptrs_.clear();
             static_vec_num_ = 0;
             is_static_built_ = true;
