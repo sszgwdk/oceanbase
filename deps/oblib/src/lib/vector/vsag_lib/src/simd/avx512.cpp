@@ -23,9 +23,88 @@ namespace vsag {
 #define PORTABLE_ALIGN32 __attribute__((aligned(32)))
 #define PORTABLE_ALIGN64 __attribute__((aligned(64)))
 
+// float L2Sqr_uint8_simd_move32(const void* pVect1v, const void* pVect2v, const void* qty_ptr) {
+//     __mmask32 mask = 0xFFFFFFFF;
+//     __mmask64 mask64 = 0xFFFFFFFFFFFFFFFF;
+
+//     uint32_t cTmp[16];
+
+//     uint8_t* pVect1 = (uint8_t*)pVect1v;
+//     uint8_t* pVect2 = (uint8_t*)pVect2v;
+//     const uint8_t* pEnd1 = pVect1 + 128;
+    
+//     __m512i sum512 = _mm512_set1_epi32(0);
+
+//     while (pVect1 < pEnd1) {
+//         // 加载 32 个 int8_t 到 __m256i 寄存器
+//         __m256i v1 = _mm256_maskz_loadu_epi8(mask, pVect1);
+//         __m256i v2 = _mm256_maskz_loadu_epi8(mask, pVect2);
+//         __m512i v1_16 = _mm512_cvtepu8_epi16(v1);
+//         __m512i v2_16 = _mm512_cvtepu8_epi16(v2);
+
+//         // 计算差值
+//         __m512i diff = _mm512_sub_epi16(v1_16, v2_16);
+
+//         // 计算平方 & 累加结果
+//         sum512 = _mm512_add_epi32(sum512, _mm512_madd_epi16(diff, diff));
+//         // 移动指针
+//         pVect1 += 32;
+//         pVect2 += 32;
+//     }
+
+//     // 将累加结果从 AVX512 寄存器中提取出来
+//     _mm512_mask_storeu_epi32(cTmp, mask64, sum512);
+
+//     float res = 0;
+//     for (int i = 0; i < 16; i++) {
+//         res += cTmp[i];
+//     }
+
+//     return res;
+// }
+
 // wk: float -> uint8_t
 float 
 L2SqrSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_ptr) {
+    // __mmask32 mask = 0xFFFFFFFF;
+    // __mmask64 mask64 = 0xFFFFFFFFFFFFFFFF;
+
+    // uint32_t cTmp[16];
+
+    // uint8_t* pVect1 = (uint8_t*)pVect1v;
+    // uint8_t* pVect2 = (uint8_t*)pVect2v;
+    // const uint8_t* pEnd1 = pVect1 + 128;
+    
+    // __m512i sum512 = _mm512_set1_epi32(0);
+
+    // while (pVect1 < pEnd1) {
+    //     // 加载 16 个 int8_t 到 __m256i 寄存器
+    //     __m128i v1 = _mm_maskz_loadu_epi8(mask, pVect1);
+    //     __m512i v1_512 = _mm512_cvtepu8_epi32(v1);
+    //     __m128i v2 = _mm_maskz_loadu_epi8(mask, pVect2);
+    //     __m512i v2_512 = _mm512_cvtepu8_epi32(v2);
+
+    //     // 计算差值
+    //     __m512i diff = _mm512_sub_epi32(v1_512, v2_512);
+    //     // 计算平方
+    //     __m512i diff_sq = _mm512_mullo_epi32(diff, diff);
+    //     // 累加结果
+    //     sum512 = _mm512_add_epi32(sum512, diff_sq);
+
+    //     // 移动指针
+    //     pVect1 += 16;
+    //     pVect2 += 16;
+    // }
+
+    // // 将累加结果从 AVX512 寄存器中提取出来
+    // _mm512_mask_storeu_epi32(cTmp, mask64, sum512);
+
+    // float res = 0;
+    // for (int i = 0; i < 16; i++) {
+    //     res += cTmp[i];
+    // }
+
+    // return (float)res;
     __mmask32 mask = 0xFFFFFFFF;
     __mmask64 mask64 = 0xFFFFFFFFFFFFFFFF;
 
@@ -38,22 +117,20 @@ L2SqrSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_p
     __m512i sum512 = _mm512_set1_epi32(0);
 
     while (pVect1 < pEnd1) {
-        // 加载 16 个 int8_t 到 __m256i 寄存器
-        __m128i v1 = _mm_maskz_loadu_epi8(mask, pVect1);
-        __m512i v1_512 = _mm512_cvtepu8_epi32(v1);
-        __m128i v2 = _mm_maskz_loadu_epi8(mask, pVect2);
-        __m512i v2_512 = _mm512_cvtepu8_epi32(v2);
+        // 加载 32 个 int8_t 到 __m256i 寄存器
+        __m256i v1 = _mm256_maskz_loadu_epi8(mask, pVect1);
+        __m256i v2 = _mm256_maskz_loadu_epi8(mask, pVect2);
+        __m512i v1_16 = _mm512_cvtepu8_epi16(v1);
+        __m512i v2_16 = _mm512_cvtepu8_epi16(v2);
 
         // 计算差值
-        __m512i diff = _mm512_sub_epi32(v1_512, v2_512);
-        // 计算平方
-        __m512i diff_sq = _mm512_mullo_epi32(diff, diff);
-        // 累加结果
-        sum512 = _mm512_add_epi32(sum512, diff_sq);
+        __m512i diff = _mm512_sub_epi16(v1_16, v2_16);
 
+        // 计算平方 & 累加结果
+        sum512 = _mm512_add_epi32(sum512, _mm512_madd_epi16(diff, diff));
         // 移动指针
-        pVect1 += 16;
-        pVect2 += 16;
+        pVect1 += 32;
+        pVect2 += 32;
     }
 
     // 将累加结果从 AVX512 寄存器中提取出来
@@ -64,7 +141,7 @@ L2SqrSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_p
         res += cTmp[i];
     }
 
-    return (float)res;
+    return res;
 }
 
 
