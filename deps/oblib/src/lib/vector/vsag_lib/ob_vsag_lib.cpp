@@ -352,7 +352,7 @@ int knn_search(VectorIndexPtr& index_handler,float* query_vector,int dim, int64_
                void* invalid) {
     // wk: 硬编码
     // TODO(wk): 动态 ef_search
-    ef_search = 150;
+    ef_search = 130;
 
     vsag::logger::debug("TRACE LOG[knn_search]:");
     vsag::ErrorType error = vsag::ErrorType::UNKNOWN_ERROR;
