@@ -1,11 +1,8 @@
 #!/bin/bash
 # 重新编译 + 切换二进制文件
-bash build.sh release --make -j2
-# 如果改了 simd相关代码，需要覆盖 libsimd.a，否则有可能没办法生效 
-# cp ./build_release/deps/oblib/src/lib/vector/vsag_lib/src/simd/libsimd.a ./deps/3rd/usr/local/oceanbase/deps/devel/lib/vsag_lib/libsimd.a
-
 # 切换二进制文件
 ./tools/deploy/obd.sh stop -n obcluster
+bash build.sh release --make -j16 --init
 cp build_release/src/observer/observer /data/obcluster/bin/observer
 echo "success cp observer to /data/obcluster/bin/observer"
 sleep 3
