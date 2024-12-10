@@ -1,5 +1,5 @@
-#!/bin/bash
 ./tools/deploy/obd.sh stop -n obcluster
+#!/bin/bash
 # 重新编译 + 切换二进制文件
 bash build.sh release --make -j2
 # 如果改了 simd相关代码，需要覆盖 libsimd.a，否则有可能没办法生效 
