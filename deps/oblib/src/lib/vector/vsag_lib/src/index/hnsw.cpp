@@ -300,7 +300,6 @@ HNSW::prepare_sq4_searcher() {
     // 构建 searcher
     searcher_.reset();
     searcher_ = std::make_shared<Searcher<SQ4Quantizer>>(final_graph_.get(), quant_.get());
-    searcher_->SetEf(150);      // 设置 ef_search
 }
 
 

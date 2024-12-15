@@ -206,14 +206,14 @@ struct HNSWInitializer {
   std::vector<std::vector<int, align_alloc<int>>> lists;
 
   // wk: 预取
-  // int prefech_lines = 1;
+  int prefech_lines = 1;
   HNSWInitializer() = default;
 
   explicit HNSWInitializer(int n, int K = 0)
       : N(n), K(K), levels(n), lists(n) {
-    // if (K >= 16) {
-    //   prefech_lines = K / 16;   // 16 * 4 = 64 正好是一个缓存行
-    // }
+    if (K >= 16) {
+      prefech_lines = K / 16;   // 16 * 4 = 64 正好是一个缓存行
+    }
   }
 
   HNSWInitializer(const HNSWInitializer &rhs) = default;
@@ -230,9 +230,6 @@ struct HNSWInitializer {
 
   int *edges(int level, int u) { return lists[u].data() + (level - 1) * K; }
 
-  void prefetch(int level, int u, int lines) const {
-    mem_prefetch((char *)edges(level, u), lines);
-  }
 
   template <typename Pool, typename Computer>
   void initialize(Pool &pool, const Computer &computer) const {
@@ -242,8 +239,13 @@ struct HNSWInitializer {
       bool changed = true;
       while (changed) {
         changed = false;
+        // wk: 预取
+        mem_prefetch((char *)edges(level, u), prefech_lines);
         const int *list = edges(level, u);
-        // TODO: 预取
+        for (int i = 0; i < K && list[i] != -1; ++i) {
+          computer.prefetch(list[i], 1);
+        }
+
         for (int i = 0; i < K && list[i] != -1; ++i) {
           int v = list[i];
           auto dist = computer(v);
@@ -277,6 +279,9 @@ struct HNSWInitializer {
     GlassReadOne(reader, N);
     GlassReadOne(reader, K);
     GlassReadOne(reader, ep);
+    if (K >= 16) {
+      prefech_lines = K / 16;   // 16 * 4 = 64 正好是一个缓存行
+    }
     for (int i = 0; i < N; ++i) {
       int cur;
       GlassReadOne(reader, cur);
@@ -670,7 +675,7 @@ template <typename Quantizer> struct Searcher : public SearcherBase {
   Quantizer* quant;
 
   // Search parameters
-  int ef = 150;
+  int ef = 120;
 
   // Memory prefetch parameters
   int po = 1;
@@ -1138,14 +1143,24 @@ struct SQ4Quantizer {
     // searcher::MaxHeap<typename Reorderer::template Computer<0>::dist_type> heap(
     MaxHeap<float> heap(k);
 
+    // wk: 提前预取 4 个向量
     if (cap > 0) {
       computer.prefetch(pool.id(0), 8);
+      if (cap > 1) {
+        computer.prefetch(pool.id(1), 8);
+      }
+      if (cap > 2) {
+        computer.prefetch(pool.id(2), 8);
+      }
+      if (cap > 3) {
+        computer.prefetch(pool.id(3), 8);
+      }
     }
 
     for (int i = 0; i < cap; ++i) {
-      if (i + 1 < cap) {
+      if (i + 4 < cap) {
         // computer.prefetch(pool.id(i + 1), 1);
-        computer.prefetch(pool.id(i + 1), 8); // 预取优化：128 * 4 = 64 * 8，一个向量就要预取8条缓存
+        computer.prefetch(pool.id(i + 4), 8); // 预取优化：128 * 4 = 64 * 8，一个向量就要预取8条缓存
       }
       int id = pool.id(i);
       float dist = computer(id);

@@ -155,6 +155,8 @@ float
 L2SqrSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_ptr);
 float
 InnerProductSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_ptr);
+int32_t
+L2SqrSQ4SIMD16ExtAVX512_dim128(const uint8_t *x, const uint8_t *y, int d);
 #endif
 
 typedef float (*DistanceFunc)(const void* pVect1, const void* pVect2, const void* qty_ptr);
