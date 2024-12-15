@@ -56,7 +56,8 @@ using MaxHeap = std::priority_queue<std::pair<float, tableint>,
 const static float THRESHOLD_ERROR = 1e-6;
 
 class HierarchicalNSW : public AlgorithmInterface<float> {
-private:
+// private:
+public:
     static const tableint MAX_LABEL_OPERATION_LOCKS = 65536;
     static const unsigned char DELETE_MARK = 0x01;
 

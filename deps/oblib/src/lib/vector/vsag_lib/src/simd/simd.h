@@ -103,6 +103,9 @@ InnerProductDistance(const void* pVect1, const void* pVect2, const void* qty_ptr
 void
 PQDistanceFloat256(const void* single_dim_centers, float single_dim_val, void* result);
 
+int32_t 
+L2SqrSQ4(const uint8_t *x, const uint8_t *y, int d);
+
 #if defined(ENABLE_SSE)
 float
 L2SqrSIMD16ExtSSE(const void* pVect1v, const void* pVect2v, const void* qty_ptr);
@@ -142,6 +145,9 @@ float
 InnerProductSIMD16ExtAVX(const void* pVect1v, const void* pVect2v, const void* qty_ptr);
 void
 PQDistanceAVXFloat256(const void* single_dim_centers, float single_dim_val, void* result);
+
+int32_t 
+L2SqrSQ4SIMD16ExtAVX(const uint8_t *x, const uint8_t *y, int d);
 #endif
 
 #if defined(ENABLE_AVX512)
@@ -161,5 +167,9 @@ typedef void (*PQDistanceFunc)(const void* single_dim_centers, float single_dim_
 
 PQDistanceFunc
 GetPQDistanceFunc();
+
+typedef int32_t (*SQ4DistanceFunc)(const uint8_t *x, const uint8_t *y, int d);
+SQ4DistanceFunc
+GetSQ4L2DistanceFunc(size_t dim);
 
 }  // namespace vsag

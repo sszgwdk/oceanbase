@@ -33,12 +33,16 @@ float (*InnerProductDistanceSIMD16ExtResiduals)(const void*, const void*, const 
 float (*InnerProductDistanceSIMD4Ext)(const void*, const void*, const void*);
 float (*InnerProductDistanceSIMD4ExtResiduals)(const void*, const void*, const void*);
 
+int32_t (*L2SqrSQ4SIMD16Ext)(const uint8_t *x, const uint8_t *y, int d);
+
 SimdStatus
 setup_simd() {
     L2SqrSIMD16Ext = L2Sqr;
     L2SqrSIMD16ExtResiduals = L2Sqr;
     L2SqrSIMD4Ext = L2Sqr;
     L2SqrSIMD4ExtResiduals = L2Sqr;
+
+    L2SqrSQ4SIMD16Ext = L2SqrSQ4;
 
     InnerProductSIMD4Ext = InnerProduct;
     InnerProductSIMD16Ext = InnerProduct;
@@ -77,6 +81,8 @@ setup_simd() {
         L2SqrSIMD16Ext = L2SqrSIMD16ExtAVX;
         InnerProductSIMD4Ext = InnerProductSIMD4ExtAVX;
         InnerProductSIMD16Ext = InnerProductSIMD16ExtAVX;
+
+        L2SqrSQ4SIMD16Ext = L2SqrSQ4SIMD16ExtAVX;
     }
     ret.dist_support_avx = true;
 #endif
@@ -150,6 +156,15 @@ GetL2DistanceFunc(size_t dim) {
     } else {
         return vsag::L2Sqr;
     }
+}
+
+SQ4DistanceFunc
+GetSQ4L2DistanceFunc(size_t dim) {
+    if (dim % 64 == 0) {
+        return vsag::L2SqrSQ4SIMD16Ext;
+    }
+
+    return vsag::L2SqrSQ4;
 }
 
 }  // namespace vsag

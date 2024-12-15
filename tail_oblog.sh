@@ -1,0 +1,1 @@
+tail -n 50 /data/obcluster/log/observer.log > tail_observer.log
