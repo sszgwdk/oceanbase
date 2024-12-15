@@ -300,6 +300,7 @@ HNSW::prepare_sq4_searcher() {
     // 构建 searcher
     searcher_.reset();
     searcher_ = std::make_shared<Searcher<SQ4Quantizer>>(final_graph_.get(), quant_.get());
+    searcher_->SetEf(150);      // 设置 ef_search
 }
 
 
@@ -312,26 +313,26 @@ HNSW::sq4_knn_search(const DatasetPtr& query,
 
     try {
         // check query vector
-        CHECK_ARGUMENT(query->GetNumElements() == 1, "query dataset should contain 1 vector only");
+        // CHECK_ARGUMENT(query->GetNumElements() == 1, "query dataset should contain 1 vector only");
         auto vector = query->GetFloat32Vectors();
-        int64_t query_dim = query->GetDim();
-        CHECK_ARGUMENT(
-            query_dim == dim_,
-            fmt::format("query.dim({}) must be equal to index.dim({})", query_dim, dim_));
+        // int64_t query_dim = query->GetDim();
+        // CHECK_ARGUMENT(
+        //     query_dim == dim_,
+        //     fmt::format("query.dim({}) must be equal to index.dim({})", query_dim, dim_));
 
         // check k
-        CHECK_ARGUMENT(k > 0, fmt::format("k({}) must be greater than 0", k))
+        // CHECK_ARGUMENT(k > 0, fmt::format("k({}) must be greater than 0", k))
         k = std::min(k, GetNumElements());
 
         std::shared_lock lock(rw_mutex_);
 
         // check search parameters
-        auto params = HnswSearchParameters::FromJson(parameters);
+        // auto params = HnswSearchParameters::FromJson(parameters);
 
         // perform search，使用 searcher 进行搜索
         double time_cost;
         Timer t(time_cost);
-        searcher_->SetEf(params.ef_search);
+        // searcher_->SetEf(params.ef_search);
         // 获取到的results已经是从小到大排好序的<ids, dist>向量r
         auto results = searcher_->Search(vector, k);
 

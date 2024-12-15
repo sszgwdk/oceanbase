@@ -204,10 +204,17 @@ struct HNSWInitializer {
   int ep;
   std::vector<int> levels;
   std::vector<std::vector<int, align_alloc<int>>> lists;
+
+  // wk: 预取
+  // int prefech_lines = 1;
   HNSWInitializer() = default;
 
   explicit HNSWInitializer(int n, int K = 0)
-      : N(n), K(K), levels(n), lists(n) {}
+      : N(n), K(K), levels(n), lists(n) {
+    // if (K >= 16) {
+    //   prefech_lines = K / 16;   // 16 * 4 = 64 正好是一个缓存行
+    // }
+  }
 
   HNSWInitializer(const HNSWInitializer &rhs) = default;
 
@@ -223,6 +230,10 @@ struct HNSWInitializer {
 
   int *edges(int level, int u) { return lists[u].data() + (level - 1) * K; }
 
+  void prefetch(int level, int u, int lines) const {
+    mem_prefetch((char *)edges(level, u), lines);
+  }
+
   template <typename Pool, typename Computer>
   void initialize(Pool &pool, const Computer &computer) const {
     int u = ep;
@@ -232,6 +243,7 @@ struct HNSWInitializer {
       while (changed) {
         changed = false;
         const int *list = edges(level, u);
+        // TODO: 预取
         for (int i = 0; i < K && list[i] != -1; ++i) {
           int v = list[i];
           auto dist = computer(v);
@@ -658,7 +670,7 @@ template <typename Quantizer> struct Searcher : public SearcherBase {
   Quantizer* quant;
 
   // Search parameters
-  int ef = 32;
+  int ef = 150;
 
   // Memory prefetch parameters
   int po = 1;
@@ -786,7 +798,7 @@ template <typename Quantizer> struct Searcher : public SearcherBase {
     for (int i = results_ids.size() - 1; i >= 0; i--) { // 倒序
       results_labels.emplace_back(graph->get_label(results_ids[i].first), results_ids[i].second);
     }
-    return results_labels;
+    return std::move(results_labels);
   }
 
   // TODO(wk): searchwithFilter
@@ -797,8 +809,17 @@ template <typename Quantizer> struct Searcher : public SearcherBase {
     while (pool.has_next()) {
       auto u = pool.pop();
       graph->prefetch(u, graph_po);
-      for (int i = 0; i < po; ++i) {
+      // for (int i = 0; i < po; ++i) {
+      // 最大化预取，pl = 1，每次取64字节，正好是一条量化向量数据
+      for (int i = 0; i < graph->K; ++i) {
         int to = graph->at(u, i);
+        if (to == -1) {
+          break;
+        }
+        // 已经访问过的也不进行预取
+        if (pool.vis.get(to)) {
+          continue;
+        }        
         computer.prefetch(to, pl);
       }
       for (int i = 0; i < graph->K; ++i) {
@@ -806,10 +827,11 @@ template <typename Quantizer> struct Searcher : public SearcherBase {
         if (v == -1) {
           break;
         }
-        if (i + po < graph->K && graph->at(u, i + po) != -1) {
-          int to = graph->at(u, i + po);
-          computer.prefetch(to, pl);
-        }
+        // 这个预取可以省去，上面预取完了
+        // if (i + po < graph->K && graph->at(u, i + po) != -1) {
+        //   int to = graph->at(u, i + po);
+        //   computer.prefetch(to, pl);
+        // }
         if (pool.vis.get(v)) {
           continue;
         }
@@ -1115,9 +1137,15 @@ struct SQ4Quantizer {
     auto computer = reorderer.get_computer(q);
     // searcher::MaxHeap<typename Reorderer::template Computer<0>::dist_type> heap(
     MaxHeap<float> heap(k);
+
+    if (cap > 0) {
+      computer.prefetch(pool.id(0), 8);
+    }
+
     for (int i = 0; i < cap; ++i) {
       if (i + 1 < cap) {
-        computer.prefetch(pool.id(i + 1), 1);
+        // computer.prefetch(pool.id(i + 1), 1);
+        computer.prefetch(pool.id(i + 1), 8); // 预取优化：128 * 4 = 64 * 8，一个向量就要预取8条缓存
       }
       int id = pool.id(i);
       float dist = computer(id);
@@ -1134,7 +1162,7 @@ struct SQ4Quantizer {
       // dst[i] = heap.pop();
       result.push_back(heap.pop_pair());
     }
-    return result;
+    return std::move(result);
   }
 
   // template <int DALIGN = do_align(DIM, kAlign)> struct Computer {
