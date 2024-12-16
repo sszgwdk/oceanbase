@@ -21,7 +21,8 @@ namespace vsag {
 
 
 // 内存预取
-const int MAX_BATCH_PREFETCH_BYTES = 2048;  // 2k，可控制提前预取的步数
+const int FP32_MAX_BATCH_PREFETCH_BYTES = 2048;  // 
+const int SQ4_MAX_BATCH_PREFETCH_BYTES = 2048;  // 可控制提前预取的步数
 inline void prefetch_L1(const void *address) {
 #ifdef USE_SSE
   _mm_prefetch((const char *)address, _MM_HINT_T0);
@@ -291,7 +292,7 @@ struct HNSWInitializer {
     GlassReadOne(reader, K);
     GlassReadOne(reader, ep);
     if (K >= 16) {
-      prefech_lines = K / 16;   // 16 * 4 = 64 正好是一个缓存行
+      pl = K / 16;   // 16 * 4 = 64 正好是一个缓存行
     }
     for (int i = 0; i < N; ++i) {
       int cur;
@@ -685,8 +686,9 @@ template <typename Quantizer> struct Searcher : public SearcherBase {
   GlassGraph<int>* graph;
   Quantizer* quant;
 
+  // 硬编码
   // Search parameters
-  int ef = 100;
+  int ef = 150;
 
   // Memory prefetch parameters
   int po = 1;
@@ -976,8 +978,8 @@ struct FP32Quantizer {
         if (code_size >= 64) {
           pl = code_size / 64;
         }
-        if (code_size < MAX_BATCH_PREFETCH_BYTES) {
-          suggest_po = MAX_BATCH_PREFETCH_BYTES / code_size;
+        if (code_size < FP32_MAX_BATCH_PREFETCH_BYTES) {
+          suggest_po = FP32_MAX_BATCH_PREFETCH_BYTES / code_size;
         }
 
         // 预先分配空间，不动态分配
@@ -1171,8 +1173,8 @@ struct SQ4Quantizer {
             pl = code_size / 64;
           }
           // suggest_po = 4096 / code_size;
-          if (code_size < MAX_BATCH_PREFETCH_BYTES) {
-            suggest_po = MAX_BATCH_PREFETCH_BYTES / code_size;
+          if (code_size < SQ4_MAX_BATCH_PREFETCH_BYTES) {
+            suggest_po = SQ4_MAX_BATCH_PREFETCH_BYTES / code_size;
           }
         }
 
