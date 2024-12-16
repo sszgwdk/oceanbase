@@ -21,6 +21,7 @@ namespace vsag {
 
 
 // 内存预取
+const int MAX_BATCH_PREFETCH_BYTES = 2048;  // 2k，可控制提前预取的步数
 inline void prefetch_L1(const void *address) {
 #ifdef USE_SSE
   _mm_prefetch((const char *)address, _MM_HINT_T0);
@@ -206,13 +207,13 @@ struct HNSWInitializer {
   std::vector<std::vector<int, align_alloc<int>>> lists;
 
   // wk: 预取
-  int prefech_lines = 1;
+  int pl = 1;
   HNSWInitializer() = default;
 
   explicit HNSWInitializer(int n, int K = 0)
       : N(n), K(K), levels(n), lists(n) {
     if (K >= 16) {
-      prefech_lines = K / 16;   // 16 * 4 = 64 正好是一个缓存行
+      pl = K / 16;   // 16 * 4 = 64 正好是一个缓存行
     }
   }
 
@@ -234,18 +235,22 @@ struct HNSWInitializer {
   template <typename Pool, typename Computer>
   void initialize(Pool &pool, const Computer &computer) const {
     int u = ep;
+    int po = computer.get_suggest_po();
     auto cur_dist = computer(u);
     for (int level = levels[u]; level > 0; --level) {
       bool changed = true;
       while (changed) {
         changed = false;
         // wk: 预取
-        mem_prefetch((char *)edges(level, u), prefech_lines);
+        mem_prefetch((char *)edges(level, u), pl);
         const int *list = edges(level, u);
         // TODO：使用原始数据查询时，这里预取会出问题，这一部分的预取对于性能提升也不大
         // for (int i = 0; i < K && list[i] != -1; ++i) {
         //   computer.prefetch(list[i], 1);
         // }
+        for (int i = 0; i < po && i < K && list[i] != -1; ++i) {
+          computer.prefetch_one(list[i]);
+        }
 
         for (int i = 0; i < K && list[i] != -1; ++i) {
           int v = list[i];
@@ -254,6 +259,11 @@ struct HNSWInitializer {
             cur_dist = dist;
             u = v;
             changed = true;
+          }
+
+          // wk: 提前po步预取
+          if (i + po < K && list[i + po] != -1) {
+            computer.prefetch_one(list[i + po]);
           }
         }
       }
@@ -829,32 +839,37 @@ template <typename Quantizer> struct Searcher : public SearcherBase {
   }
 
   // TODO(wk): searchwithFilter
-  void SearchWithFilter(const float *q, int k, int *dst, const int *filter);
+  // void SearchWithFilter(const float *q, int k, int *dst, const int *filter);
 
   template <typename Pool, typename Computer>
   void SearchImpl(Pool &pool, const Computer &computer) const {
+    int vec_po = computer.get_suggest_po();
+
     while (pool.has_next()) {
       auto u = pool.pop();
       graph->prefetch(u, graph_po);
       // for (int i = 0; i < po; ++i) {
       // 最大化预取，pl = 1，每次取64字节，正好是一条量化向量数据
-      for (int i = 0; i < graph->K; ++i) {
+      // 每次预取 vec_po 个向量
+      for (int i = 0; i < vec_po && i < graph->K; ++i) {
         int to = graph->at(u, i);
         if (to == -1) {
           break;
         }
+        // wk：(TODO)这里似乎有点问题，pool本身比较大，可能会有比较严重的缓存污染？
         // 已经访问过的也不进行预取
-        if (pool.vis.get(to)) {
-          continue;
-        }        
-        computer.prefetch(to, pl);
+        // if (pool.vis.get(to)) {
+        //   continue;
+        // }        
+        // computer.prefetch(to, pl);
+        computer.prefetch_one(to);
       }
       for (int i = 0; i < graph->K; ++i) {
         int v = graph->at(u, i);
         if (v == -1) {
           break;
         }
-        // 这个预取可以省去，上面预取完了
+        // 
         // if (i + po < graph->K && graph->at(u, i + po) != -1) {
         //   int to = graph->at(u, i + po);
         //   computer.prefetch(to, pl);
@@ -865,6 +880,12 @@ template <typename Quantizer> struct Searcher : public SearcherBase {
         pool.vis.set(v);
         auto cur_dist = computer(v);
         pool.insert(v, cur_dist);
+
+        // 提前 vec_po 步预取
+        if (i + vec_po < graph->K && graph->at(u, i + vec_po) != -1) {
+          int to = graph->at(u, i + vec_po);
+          computer.prefetch_one(to);
+        }
       }
     }
   }
@@ -873,21 +894,24 @@ template <typename Quantizer> struct Searcher : public SearcherBase {
   // 需要减少预取的大小
   template <typename Pool, typename Computer>
   void RawVectorSearchImpl(Pool &pool, const Computer &computer) const {
+    int vec_po = computer.get_suggest_po();
+
     while (pool.has_next()) {
       auto u = pool.pop();
       graph->prefetch(u, graph_po);
       // for (int i = 0; i < po; ++i) {
       // 这里一次只预取 8 个向量(4kb)
-      for (int i = 0; i < 8; ++i) {
+      for (int i = 0; i < vec_po && i < graph->K; ++i) {
         int to = graph->at(u, i);
         if (to == -1) {
           break;
         }
-        // 已经访问过的也不进行预取
-        if (pool.vis.get(to)) {
-          continue;
-        }        
-        computer.prefetch(to, 8);   // 一次 8 * 64 才能取到一个完整的向量
+        // 
+        // if (pool.vis.get(to)) {
+        //   continue;
+        // }        
+        // computer.prefetch(to, 8);   // 一次 8 * 64 才能取到一个完整的向量
+        computer.prefetch_one(to);
       }
       for (int i = 0; i < graph->K; ++i) {
         int v = graph->at(u, i);
@@ -895,16 +919,22 @@ template <typename Quantizer> struct Searcher : public SearcherBase {
           break;
         }
         // 提前预取
-        if (i + 8 < graph->K && graph->at(u, i + 8) != -1) {
-          int to = graph->at(u, i + 8);
-          computer.prefetch(to, 8);
-        }
+        // if (i + 8 < graph->K && graph->at(u, i + 8) != -1) {
+        //   int to = graph->at(u, i + 8);
+        //   computer.prefetch(to, 8);
+        // }
         if (pool.vis.get(v)) {
           continue;
         }
         pool.vis.set(v);
         auto cur_dist = computer(v);
         pool.insert(v, cur_dist);
+
+        // 提前 vec_po 步预取
+        if (i + vec_po < graph->K && graph->at(u, i + vec_po) != -1) {
+          int to = graph->at(u, i + vec_po);
+          computer.prefetch_one(to);
+        }
       }
     }
   }
@@ -930,7 +960,10 @@ struct FP32Quantizer {
 
   size_t d;     // d 由 int -> size_t
   int d_align;
-  int64_t code_size;      // 前面都在初始化时就能得到
+  int64_t code_size;      
+  int pl = 1;   // 读取一个向量所需要的 mem_prefetch 的次数
+  int suggest_po = 1;   // 建议的批量prefetch的数目
+  // 前面都在初始化时就能得到
 
   int cur_element_count;    // 统计当前元素个数
   char *codes = nullptr;
@@ -940,6 +973,13 @@ struct FP32Quantizer {
   explicit FP32Quantizer(int dim)
       : d(dim), d_align(do_align(dim, kAlign)), code_size(d_align * 4) {
         cur_element_count = 0;    // 初始化为0
+        if (code_size >= 64) {
+          pl = code_size / 64;
+        }
+        if (code_size < MAX_BATCH_PREFETCH_BYTES) {
+          suggest_po = MAX_BATCH_PREFETCH_BYTES / code_size;
+        }
+
         // 预先分配空间，不动态分配
         // codes 里边存所有的原始向量数据
         codes = (char *)alloc2M(code_size * 1000010);
@@ -997,6 +1037,14 @@ struct FP32Quantizer {
     }
     void prefetch(int u, int lines) const {
       mem_prefetch(quant.get_data(u), lines);
+    }
+
+    void prefetch_one(int u) const {
+      mem_prefetch(quant.get_data(u), quant.pl);
+    }
+
+    int get_suggest_po() const {
+      return quant.suggest_po;
     }
   };
 
@@ -1104,6 +1152,9 @@ struct SQ4Quantizer {
 
   int64_t code_size;
 
+  int pl = 1;   // 读取一个向量所需要的 mem_prefetch 的次数
+  int suggest_po = 1;   // 建议的批量prefetch的数目
+
   int cur_element_count;    // 统计当前元素个数
   data_type *codes = nullptr;
 
@@ -1116,6 +1167,13 @@ struct SQ4Quantizer {
       : d(dim), d_align(do_align(dim, kAlign)), code_size(d_align / 2),
         reorderer(dim) {
           cur_element_count = 0;    // 初始化为0
+          if (code_size >= 64) {
+            pl = code_size / 64;
+          }
+          // suggest_po = 4096 / code_size;
+          if (code_size < MAX_BATCH_PREFETCH_BYTES) {
+            suggest_po = MAX_BATCH_PREFETCH_BYTES / code_size;
+          }
         }
 
   ~SQ4Quantizer() { free(codes); }
@@ -1205,28 +1263,22 @@ struct SQ4Quantizer {
     // searcher::MaxHeap<typename Reorderer::template Computer<0>::dist_type> heap(
     MaxHeap<float> heap(k);
 
-    // wk: 提前预取 4 个向量 (2k)
-    if (cap > 0) {
-      computer.prefetch(pool.id(0), 8);
-      if (cap > 1) {
-        computer.prefetch(pool.id(1), 8);
-      }
-      if (cap > 2) {
-        computer.prefetch(pool.id(2), 8);
-      }
-      if (cap > 3) {
-        computer.prefetch(pool.id(3), 8);
-      }
+    // wk: 提前预取 po 个向量
+    int po = computer.get_suggest_po();
+    for (int i = 0; i < std::min(cap, po); ++i) {
+      computer.prefetch_one(pool.id(i));
     }
 
     for (int i = 0; i < cap; ++i) {
-      if (i + 4 < cap) {
-        // computer.prefetch(pool.id(i + 1), 1);
-        computer.prefetch(pool.id(i + 4), 8); // 预取优化：128 * 4 = 64 * 8，一个向量就要预取8条缓存
-      }
       int id = pool.id(i);
       float dist = computer(id);
       heap.push(id, dist);
+      // 提前 po 步预取
+      if (i + po < cap) {
+        // computer.prefetch(pool.id(i + 1), 1);
+        // computer.prefetch(pool.id(i + 4), 8); // 预取优化：128 * 4 = 64 * 8，一个向量就要预取8条缓存
+        computer.prefetch_one(pool.id(i + po));
+      }
     }
 
     std::vector<std::pair<int, float>> result;
@@ -1261,6 +1313,14 @@ struct SQ4Quantizer {
     }
     void prefetch(int u, int lines) const {
       mem_prefetch(quant.get_data(u), lines);
+    }
+
+    void prefetch_one(int u) const {
+      mem_prefetch(quant.get_data(u), quant.pl);
+    }
+
+    int get_suggest_po() const {
+      return quant.suggest_po;
     }
   };
 
