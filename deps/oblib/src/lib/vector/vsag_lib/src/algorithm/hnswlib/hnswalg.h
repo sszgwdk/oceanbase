@@ -40,6 +40,137 @@
 #include "visited_list_pool.h"
 
 namespace hnswlib {
+
+// 内存预取
+inline void prefetch_L1(const void *address) {
+#ifdef USE_SSE
+  _mm_prefetch((const char *)address, _MM_HINT_T0);
+#else
+  __builtin_prefetch(address, 0, 3);
+#endif
+}
+
+inline void mem_prefetch(char *ptr, const int num_lines) {
+  switch (num_lines) {
+  default:
+    [[fallthrough]];
+  case 28:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 27:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 26:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 25:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 24:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 23:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 22:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 21:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 20:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 19:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 18:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 17:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 16:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 15:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 14:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 13:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 12:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 11:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 10:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 9:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 8:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 7:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 6:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 5:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 4:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 3:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 2:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 1:
+    prefetch_L1(ptr);
+    ptr += 64;
+    [[fallthrough]];
+  case 0:
+    break;
+  }
+}
+
 using tableint = unsigned int;
 using linklistsizeint = unsigned int;
 using reverselinklist = vsag::UnorderedSet<uint32_t>;
@@ -550,6 +681,10 @@ public:
 
             tableint current_node_id = current_node_pair.second;
             int* data = (int*)get_linklist0(current_node_id);
+
+            // wk: prefetch linklist0
+            mem_prefetch((char*)(data + 1), maxM0_ * sizeof(tableint) / 64);
+
             size_t size = getListCount((linklistsizeint*)data);
             //                bool cur_node_deleted = isMarkedDeleted(current_node_id);
             if (collect_metrics) {
@@ -557,23 +692,35 @@ public:
                 metric_distance_computations_ += size;
             }
 
-            auto vector_data_ptr = data_level0_memory_->GetElementPtr((*(data + 1)), offsetData_);
+            // wk
+            // prefetch: 32 个向量 (32 * 128 = 4k)
+            for (int j = 1; j <= 32 && j <= size; j++) {
+                auto vector_data_ptr = data_level0_memory_->GetElementPtr((*(data + j)), offsetData_);
+                mem_prefetch(vector_data_ptr,  data_size_ / 2);
+            }
+
+            // auto vector_data_ptr = data_level0_memory_->GetElementPtr((*(data + 1)), offsetData_);
 #ifdef USE_SSE
             _mm_prefetch((char*)(visited_array + *(data + 1)), _MM_HINT_T0);
             _mm_prefetch((char*)(visited_array + *(data + 1) + 64), _MM_HINT_T0);
-            _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
-            _mm_prefetch((char*)(data + 2), _MM_HINT_T0);
+            // _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
+            // _mm_prefetch((char*)(data + 2), _MM_HINT_T0);
 #endif
 
             for (size_t j = 1; j <= size; j++) {
                 int candidate_id = *(data + j);
-                size_t pre_l = std::min(j, size - 2);
-                auto vector_data_ptr =
-                    data_level0_memory_->GetElementPtr((*(data + pre_l + 1)), offsetData_);
+                size_t pre_l = std::min(j, size - 2);       // 可以大概知道最初只预取了2个向量
+                // auto vector_data_ptr =
+                //     data_level0_memory_->GetElementPtr((*(data + pre_l + 1)), offsetData_);
 #ifdef USE_SSE
                 _mm_prefetch((char*)(visited_array + *(data + pre_l + 1)), _MM_HINT_T0);
-                _mm_prefetch(vector_data_ptr, _MM_HINT_T0);  ////////////
+                // _mm_prefetch(vector_data_ptr, _MM_HINT_T0);  ////////////
 #endif
+                // 提前32步预取向量
+                if (j + 32 <= size) {
+                    auto vector_data_ptr = data_level0_memory_->GetElementPtr((*(data + j + 32)), offsetData_);
+                    mem_prefetch(vector_data_ptr, data_size_ / 2);
+                }
                 if (!(visited_array[candidate_id] == visited_array_tag)) {
                     visited_array[candidate_id] = visited_array_tag;
 
@@ -581,11 +728,12 @@ public:
                     float dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
                     if (top_candidates.size() < ef || lowerBound > dist) {
                         candidate_set.emplace(-dist, candidate_id);
-                        auto vector_data_ptr = data_level0_memory_->GetElementPtr(
-                            candidate_set.top().second, offsetLevel0_);
-#ifdef USE_SSE
-                        _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
-#endif
+                        // wk：这个预取感觉没啥必要性
+//                         auto vector_data_ptr = data_level0_memory_->GetElementPtr(
+//                             candidate_set.top().second, offsetLevel0_);
+// #ifdef USE_SSE
+//                         _mm_prefetch(vector_data_ptr, _MM_HINT_T0);
+// #endif
 
                         if ((!has_deletions || !isMarkedDeleted(candidate_id)) &&
                             ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id))))
@@ -1674,7 +1822,15 @@ public:
                 metric_hops_++;
                 metric_distance_computations_ += size;
 
+                // wk: prefetch
+                mem_prefetch((char *)(data + 1), maxM_ * sizeof(tableint) / 64);
                 tableint* datal = (tableint*)(data + 1);
+                for (int i = 0; i < size; i++) {
+                    tableint cand = datal[i];
+                    auto vector_data_ptr = data_level0_memory_->GetElementPtr(cand, offsetData_);
+                    mem_prefetch(vector_data_ptr, data_size_ / 64);
+                }
+
                 for (int i = 0; i < size; i++) {
                     tableint cand = datal[i];
                     if (cand < 0 || cand > max_elements_)

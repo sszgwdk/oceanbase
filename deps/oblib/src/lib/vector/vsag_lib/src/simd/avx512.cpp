@@ -112,7 +112,8 @@ L2SqrSIMD16ExtAVX512(const void* pVect1v, const void* pVect2v, const void* qty_p
 
     uint8_t* pVect1 = (uint8_t*)pVect1v;
     uint8_t* pVect2 = (uint8_t*)pVect2v;
-    const uint8_t* pEnd1 = pVect1 + 128;
+    size_t qty = *((size_t*)qty_ptr);
+    const uint8_t* pEnd1 = pVect1 + qty;
     
     __m512i sum512 = _mm512_set1_epi32(0);
 
