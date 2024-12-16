@@ -133,6 +133,7 @@ int HnswIndexHandler::knn_search(const vsag::DatasetPtr& query, int64_t topk,
     vsag::logger::debug("  search_parameters:{}", parameters);
     vsag::logger::debug("  topk:{}", topk);
     vsag::ErrorType error = vsag::ErrorType::UNKNOWN_ERROR;
+    // vsag::logger::debug("  sq4_searcher, nb=:{}", index_->GetNumElements());
 
     auto result = index_->KnnSearch(query, topk, parameters, filter);
     if (result.has_value()) {
@@ -314,7 +315,7 @@ int knn_search(VectorIndexPtr& index_handler,float* query_vector,int dim, int64_
                const float*& dist, const int64_t*& ids, int64_t &result_size, int ef_search,
                void* invalid) {
     // wk: 硬编码ef_search
-    ef_search = 150;
+    ef_search = 100;
 
     vsag::logger::debug("TRACE LOG[knn_search]:");
     vsag::ErrorType error = vsag::ErrorType::UNKNOWN_ERROR;

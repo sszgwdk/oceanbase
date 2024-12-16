@@ -242,9 +242,10 @@ struct HNSWInitializer {
         // wk: 预取
         mem_prefetch((char *)edges(level, u), prefech_lines);
         const int *list = edges(level, u);
-        for (int i = 0; i < K && list[i] != -1; ++i) {
-          computer.prefetch(list[i], 1);
-        }
+        // TODO：使用原始数据查询时，这里预取会出问题，这一部分的预取对于性能提升也不大
+        // for (int i = 0; i < K && list[i] != -1; ++i) {
+        //   computer.prefetch(list[i], 1);
+        // }
 
         for (int i = 0; i < K && list[i] != -1; ++i) {
           int v = list[i];
@@ -675,7 +676,7 @@ template <typename Quantizer> struct Searcher : public SearcherBase {
   Quantizer* quant;
 
   // Search parameters
-  int ef = 120;
+  int ef = 100;
 
   // Memory prefetch parameters
   int po = 1;
@@ -790,6 +791,13 @@ template <typename Quantizer> struct Searcher : public SearcherBase {
 
   // 新增接口：返回 <label, dist>
   std::vector<std::pair<int64_t, float>> Search(const float *q, int k) const override {
+    // wk：用于混合标量测试
+    // k值很大时基于量化方法的近似距离搜索的精度会急剧下降
+    // 这时候使用精确距离搜索
+    if (k > ef / 2) {
+      return RawVectorSearch(q, k);
+    }
+
     auto computer = quant->get_computer(q);
     // searcher::LinearPool<typename Quantizer::template Computer<0>::dist_type>
     LinearPool<typename Quantizer::Computer::dist_type>
@@ -802,6 +810,20 @@ template <typename Quantizer> struct Searcher : public SearcherBase {
     // for (int i = 0; i < results_ids.size(); i++) {
     for (int i = results_ids.size() - 1; i >= 0; i--) { // 倒序
       results_labels.emplace_back(graph->get_label(results_ids[i].first), results_ids[i].second);
+    }
+    return std::move(results_labels);
+  }
+
+  std::vector<std::pair<int64_t, float>> RawVectorSearch(const float *q, int k) const {
+    auto computer = quant->get_reorderer_computer(q);
+    LinearPool<float> pool(nb, std::max(k, ef), k);
+    graph->initialize_search(pool, computer);
+    RawVectorSearchImpl(pool, computer);
+    // 不用进行重排了，直接返回k个结果
+    std::vector<std::pair<int64_t, float>> results_labels;
+    for (int i = 0; i < k; ++i) {
+      // dst[i] = pool.id(i);
+      results_labels.emplace_back(graph->get_label(pool.id(i)), pool.data_[i].distance);
     }
     return std::move(results_labels);
   }
@@ -837,6 +859,46 @@ template <typename Quantizer> struct Searcher : public SearcherBase {
         //   int to = graph->at(u, i + po);
         //   computer.prefetch(to, pl);
         // }
+        if (pool.vis.get(v)) {
+          continue;
+        }
+        pool.vis.set(v);
+        auto cur_dist = computer(v);
+        pool.insert(v, cur_dist);
+      }
+    }
+  }
+
+  // 使用原始向量搜索
+  // 需要减少预取的大小
+  template <typename Pool, typename Computer>
+  void RawVectorSearchImpl(Pool &pool, const Computer &computer) const {
+    while (pool.has_next()) {
+      auto u = pool.pop();
+      graph->prefetch(u, graph_po);
+      // for (int i = 0; i < po; ++i) {
+      // 这里一次只预取 8 个向量(4kb)
+      for (int i = 0; i < 8; ++i) {
+        int to = graph->at(u, i);
+        if (to == -1) {
+          break;
+        }
+        // 已经访问过的也不进行预取
+        if (pool.vis.get(to)) {
+          continue;
+        }        
+        computer.prefetch(to, 8);   // 一次 8 * 64 才能取到一个完整的向量
+      }
+      for (int i = 0; i < graph->K; ++i) {
+        int v = graph->at(u, i);
+        if (v == -1) {
+          break;
+        }
+        // 提前预取
+        if (i + 8 < graph->K && graph->at(u, i + 8) != -1) {
+          int to = graph->at(u, i + 8);
+          computer.prefetch(to, 8);
+        }
         if (pool.vis.get(v)) {
           continue;
         }
@@ -1143,7 +1205,7 @@ struct SQ4Quantizer {
     // searcher::MaxHeap<typename Reorderer::template Computer<0>::dist_type> heap(
     MaxHeap<float> heap(k);
 
-    // wk: 提前预取 4 个向量
+    // wk: 提前预取 4 个向量 (2k)
     if (cap > 0) {
       computer.prefetch(pool.id(0), 8);
       if (cap > 1) {
@@ -1205,6 +1267,11 @@ struct SQ4Quantizer {
   auto get_computer(const float *query) const {
     // return Computer<0>(*this, query);
     return Computer(*this, query);
+  }
+
+  // 直接获取 reorderer 的 computer
+  auto get_reorderer_computer(const float *query) const {
+    return reorderer.get_computer(query);
   }
 
   // 适配 ob 序列化
