@@ -21,8 +21,8 @@ namespace vsag {
 
 
 // 内存预取
-const int FP32_MAX_BATCH_PREFETCH_BYTES = 4096;  // 
-const int SQ4_MAX_BATCH_PREFETCH_BYTES = 4096;  //可控制提前预取的步数
+const int FP32_MAX_BATCH_PREFETCH_BYTES = 2048;  // 
+const int SQ4_MAX_BATCH_PREFETCH_BYTES = 2048;  //可控制提前预取的步数
 inline void prefetch_L1(const void *address) {
 #ifdef USE_SSE
   _mm_prefetch((const char *)address, _MM_HINT_T0);
@@ -692,7 +692,7 @@ template <typename Quantizer> struct Searcher : public SearcherBase {
 
   // 硬编码
   // Search parameters
-  int ef = 110;
+  int ef = 160;
 
   // Memory prefetch parameters
   int po = 1;
