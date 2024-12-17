@@ -126,6 +126,9 @@ private:
   int set_lookup_vid_key(ObRowkey& doc_id_rowkey);
   int set_lookup_vid_keys(ObNewRow *row, int64_t count);
   int set_main_table_lookup_key();
+  // whp
+  int set_main_table_lookup_key(ObRowkey& table_rowkey);
+  int set_main_table_lookup_keys(ObNewRow *row, int64_t count);
   static int init_base_idx_scan_param(const share::ObLSID &ls_id,
                                       const common::ObTabletID &tablet_id,
                                       const sql::ObDASScanCtDef *ctdef,

@@ -65,7 +65,7 @@ int ObDomainIndexLookupOp::next_state()
   if (state_ == INDEX_SCAN) {
     if (0 == lookup_rowkey_cnt_) {
       state_ = LookupState::FINISHED;
-    } else if (need_scan_aux_) {
+    } else if (need_scan_aux_ && !enable_aux_skip_) {
       state_ = LookupState::AUX_LOOKUP;
     } else {
       state_ = LookupState::DO_LOOKUP;
