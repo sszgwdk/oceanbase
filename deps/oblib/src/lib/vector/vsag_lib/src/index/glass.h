@@ -21,8 +21,8 @@ namespace vsag {
 
 
 // 内存预取
-const int FP32_MAX_BATCH_PREFETCH_BYTES = 2048;  // 
-const int SQ4_MAX_BATCH_PREFETCH_BYTES = 2048;  // 可控制提前预取的步数
+const int FP32_MAX_BATCH_PREFETCH_BYTES = 4096;  // 
+const int SQ4_MAX_BATCH_PREFETCH_BYTES = 4096;  //可控制提前预取的步数
 inline void prefetch_L1(const void *address) {
 #ifdef USE_SSE
   _mm_prefetch((const char *)address, _MM_HINT_T0);
@@ -242,8 +242,10 @@ struct HNSWInitializer {
       bool changed = true;
       while (changed) {
         changed = false;
-        // wk: 预取
-        mem_prefetch((char *)edges(level, u), pl);
+        
+        // 这里预取有 bug ？？
+        // wk: 预取 list 似乎有bug 跟对齐内存分配方式有关？
+        // mem_prefetch((char *)edges(level, u), pl);
         const int *list = edges(level, u);
         // TODO：使用原始数据查询时，这里预取会出问题，这一部分的预取对于性能提升也不大
         // for (int i = 0; i < K && list[i] != -1; ++i) {
@@ -294,6 +296,8 @@ struct HNSWInitializer {
     if (K >= 16) {
       pl = K / 16;   // 16 * 4 = 64 正好是一个缓存行
     }
+    // 不 resize 会越界？
+    levels.resize(N);
     for (int i = 0; i < N; ++i) {
       int cur;
       GlassReadOne(reader, cur);
@@ -484,9 +488,9 @@ template <typename node_t> struct GlassGraph {
     static_assert(std::is_same_v<node_t, int32_t>);
     GlassWriteOne(writer, N);
     GlassWriteOne(writer, K);
-    writer.Write((char *)data, N * K * 4);
+    writer.Write((char *)data, (size_t)N * K * 4);
     // labels 序列化
-    writer.Write((char *)labels, N * 8);
+    writer.Write((char *)labels, (size_t)N * 8);
     if (initializer) {
       initializer->SerializeImpl(writer);
     }
@@ -496,9 +500,9 @@ template <typename node_t> struct GlassGraph {
     static_assert(std::is_same_v<node_t, int32_t>);
     GlassWriteOne(writer, N);
     GlassWriteOne(writer, K);
-    writer.Write((char *)data, N * K * 4);
+    writer.Write((char *)data, (size_t)N * K * 4);
     // labels 序列化
-    writer.Write((char *)labels, N * 8);
+    writer.Write((char *)labels, (size_t)N * 8);
     if (initializer) {
       initializer->SerializeImpl(writer);
     }
@@ -541,10 +545,10 @@ template <typename node_t> struct GlassGraph {
     GlassReadOne(reader, N);
     GlassReadOne(reader, K);
     data = (node_t *)alloc2M((size_t)N * K * 4);
-    reader.Read((char *)data, N * K * 4);
+    reader.Read((char *)data, (size_t)N * K * 4);
     // labels 反序列化
     labels = (int64_t *)alloc2M((size_t)N * 8);
-    reader.Read((char *)labels, N * 8);
+    reader.Read((char *)labels, (size_t)N * 8);
     // initializer 反序列化
     initializer = std::make_unique<HNSWInitializer>(N);
     initializer->DeserializeImpl(reader);
@@ -688,7 +692,7 @@ template <typename Quantizer> struct Searcher : public SearcherBase {
 
   // 硬编码
   // Search parameters
-  int ef = 150;
+  int ef = 110;
 
   // Memory prefetch parameters
   int po = 1;
