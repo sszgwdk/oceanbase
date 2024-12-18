@@ -405,7 +405,9 @@ int ObPxMultiPartSSTableInsertOp::get_next_row_with_cache()
         ObTabletID tablet_id = tablet_seq_caches_.at(curr_tablet_idx_).tablet_id_;
         if (is_vec_gen_vid_) {
           // TODO @lhd make vid into struct
-          datum.set_uint(next_autoinc_val);
+          // datum.set_uint(next_autoinc_val);
+          datum.set_int(vid_);
+          ++vid_;
         } else {
           datum.set_uint(next_autoinc_val);
         }

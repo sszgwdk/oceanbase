@@ -365,7 +365,8 @@ int ObVectorIndexLookupOp::reset_lookup_state()
   return ret;
 }
 
-bool enable_aux_skip = true;
+// whp, not do skip here
+bool enable_aux_skip = false;
 int ObVectorIndexLookupOp::fetch_index_table_rowkey()
 {
   int ret = OB_SUCCESS;
