@@ -122,9 +122,9 @@ int ObVectorIndexUtil::parser_params_from_string(
       param.dim_ = 0; // TODO@xiajin: fill dim
 
       // wk: 硬编码参数
-      param.m_ = 16;
+      param.m_ = 32;
       param.ef_construction_ = 200;
-      param.ef_search_ = 160;
+      param.ef_search_ = 110;
     }
     LOG_DEBUG("parser vector index param", K(ret), K(index_param_str), K(param));
   }
