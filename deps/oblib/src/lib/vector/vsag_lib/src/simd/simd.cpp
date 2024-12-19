@@ -165,9 +165,9 @@ GetL2DistanceFunc(size_t dim) {
 SQ4DistanceFunc
 GetSQ4L2DistanceFunc(size_t dim) {
     // 不用 avx512，无明显提升
-    // if (dim == 128) {
-    //     return vsag::L2SqrSQ4SIMD128DIM;
-    // }
+    if (dim == 128) {
+        return vsag::L2SqrSQ4SIMD128DIM;
+    }
 
     if (dim % 64 == 0) {
         return vsag::L2SqrSQ4SIMD16Ext;
