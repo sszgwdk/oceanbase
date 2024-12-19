@@ -526,6 +526,7 @@ class ObTableBatchOperation
   OB_UNIS_VERSION(1);
 public:
   static const int64_t MAX_BATCH_SIZE = 1000;
+  // whp: ori 8
   static const int64_t COMMON_BATCH_SIZE = 8;
 public:
   ObTableBatchOperation()

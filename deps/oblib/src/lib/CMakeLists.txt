@@ -422,6 +422,7 @@ target_link_directories(
   ${DEP_DIR}/lib ${DEP_DIR}/lib/vsag_lib
   ${CMAKE_BINARY_DIR}/deps/oblib/src/lib/vector/vsag_lib 
   ${CMAKE_BINARY_DIR}/deps/oblib/src/lib//vector/vsag_lib/src
+  ${CMAKE_BINARY_DIR}/deps/oblib/src/lib//vector/vsag_lib/src/simd
   ${CMAKE_BINARY_DIR}/_deps/fmt-build
 )
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
@@ -438,7 +439,7 @@ if (NOT OB_BUILD_VSAG_RPM)
     PUBLIC
     libob_vsag_static_test.a
     libcpuinfo.a
-    libsimd.a
+    libsimd_test.a
     libvsag_static_test.a
     libdiskann.a
     libopenblas.a
@@ -453,7 +454,7 @@ else()
     PUBLIC
     libob_vsag_static.a
     libcpuinfo.a
-    libsimd.a
+    libsimd_test.a
     libvsag_static.a
     libdiskann.a
     libopenblas.a
@@ -469,7 +470,7 @@ elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
     PUBLIC
     libob_vsag_static_test.a
     libcpuinfo.a
-    libsimd.a
+    libsimd_test.a
     libvsag_static_test.a
     libdiskann.a
     libopenblas.a

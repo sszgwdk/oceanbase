@@ -133,6 +133,7 @@ int HnswIndexHandler::knn_search(const vsag::DatasetPtr& query, int64_t topk,
     vsag::logger::debug("  search_parameters:{}", parameters);
     vsag::logger::debug("  topk:{}", topk);
     vsag::ErrorType error = vsag::ErrorType::UNKNOWN_ERROR;
+    // vsag::logger::debug("  sq4_searcher, nb=:{}", index_->GetNumElements());
 
     auto result = index_->KnnSearch(query, topk, parameters, filter);
     if (result.has_value()) {

@@ -38,6 +38,8 @@
 #include "vsag/index.h"
 #include "vsag/readerset.h"
 
+#include "glass.h"
+
 namespace vsag {
 class BitsetOrCallbackFilter : public hnswlib::BaseFilterFunctor {
 public:
@@ -170,7 +172,8 @@ public:
 
     tl::expected<void, Error>
     Serialize(std::ostream& out_stream) override {
-        SAFE_CALL(return this->serialize(out_stream));
+        // SAFE_CALL(return this->serialize(out_stream));
+        SAFE_CALL(return this->test_serialize(out_stream));
     }
 
     tl::expected<void, Error>
@@ -185,13 +188,21 @@ public:
 
     tl::expected<void, Error>
     Deserialize(std::istream& in_stream) override {
-        SAFE_CALL(return this->deserialize(in_stream));
+        // SAFE_CALL(return this->deserialize(in_stream));
+        // TODO
+        SAFE_CALL(return this->test_deserialize(in_stream));
     }
 
 public:
+    // int64_t
+    // GetNumElements() const override {
+    //     return alg_hnsw->getCurrentElementCount() - alg_hnsw->getDeletedCount();
+    // }
+
+    // wk: glass sq4(TODO)
     int64_t
     GetNumElements() const override {
-        return alg_hnsw->getCurrentElementCount() - alg_hnsw->getDeletedCount();
+        return quant_->cur_element_count;
     }
 
     int64_t
@@ -232,6 +243,14 @@ private:
                const std::string& parameters,
                hnswlib::BaseFilterFunctor* filter_ptr) const;
 
+    tl::expected<DatasetPtr, Error>
+    sq4_knn_search(const DatasetPtr& query,
+               int64_t k,
+               const std::string& parameters,
+               hnswlib::BaseFilterFunctor* filter_ptr) const;
+
+    void prepare_sq4_searcher();
+
     template <typename FilterType>
     tl::expected<DatasetPtr, Error>
     range_search_internal(const DatasetPtr& query,
@@ -269,6 +288,9 @@ private:
     serialize(std::ostream& out_stream);
 
     tl::expected<void, Error>
+    test_serialize(std::ostream& out_stream);       // 用于测试
+
+    tl::expected<void, Error>
     deserialize(const BinarySet& binary_set);
 
     tl::expected<void, Error>
@@ -276,6 +298,10 @@ private:
 
     tl::expected<void, Error>
     deserialize(std::istream& in_stream);
+
+    tl::expected<void, Error>
+    test_deserialize(std::istream& in_stream);       // 用于测试
+
 
     tl::expected<bool, Error>
     init_memory_space();
@@ -286,6 +312,15 @@ private:
 private:
     std::shared_ptr<hnswlib::AlgorithmInterface<float>> alg_hnsw;
     std::shared_ptr<hnswlib::SpaceInterface> space;
+
+    // wk: glass sq4
+    // final_graph_、quant_都要持久化
+    std::shared_ptr<GlassGraph<int>> final_graph_;    // 存放 hnsw 构建出的图
+    int M_;
+    // std::shared_ptr<SQ4Quantizer<Metric::L2, FP32Quantizer<metric>, DIM = 0>> quant_;
+    std::shared_ptr<SQ4Quantizer> quant_;
+    std::shared_ptr<Searcher<SQ4Quantizer>> searcher_;
+  
 
     bool use_conjugate_graph_;
     std::shared_ptr<ConjugateGraph> conjugate_graph_;

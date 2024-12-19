@@ -137,6 +137,8 @@ private:
   bool is_vec_data_complement_;
   bool is_vec_gen_vid_;
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartSSTableInsertOp);
+  // whp
+  std::atomic<int64_t> vid_{0};
 };
 
 }// end namespace sql

@@ -124,7 +124,7 @@ int ObVectorIndexUtil::parser_params_from_string(
       // wk: 硬编码参数
       param.m_ = 16;
       param.ef_construction_ = 200;
-      param.ef_search_ = 150;
+      param.ef_search_ = 160;
     }
     LOG_DEBUG("parser vector index param", K(ret), K(index_param_str), K(param));
   }

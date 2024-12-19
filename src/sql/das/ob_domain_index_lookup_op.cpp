@@ -65,7 +65,7 @@ int ObDomainIndexLookupOp::next_state()
   if (state_ == INDEX_SCAN) {
     if (0 == lookup_rowkey_cnt_) {
       state_ = LookupState::FINISHED;
-    } else if (need_scan_aux_) {
+    } else if (need_scan_aux_ /*&& !enable_aux_skip_*/) {
       state_ = LookupState::AUX_LOOKUP;
     } else {
       state_ = LookupState::DO_LOOKUP;
@@ -188,6 +188,14 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
         break;
       }
       case AUX_LOOKUP: {
+        if (enable_aux_skip_) {
+          for (auto& key_range : doc_id_scan_param_.key_ranges_) {
+            scan_param_.key_ranges_.push_back(key_range);
+          }
+          next_state();
+          break;
+        }
+
         if (OB_FAIL(get_aux_table_rowkeys(lookup_rowkey_cnt_))) {
           if (ret != OB_ITER_END) {
             LOG_WARN("do aux index lookup failed", K(ret));

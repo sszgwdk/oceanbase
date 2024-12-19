@@ -97,6 +97,12 @@ HNSW::HNSW(std::shared_ptr<hnswlib::SpaceInterface> space_interface,
             ef_construction,
             Options::Instance().block_size_limit());
     }
+
+    // for glass
+    final_graph_ = std::make_shared<GlassGraph<int>>();     // 用于提取 HNSW 图结构，未初始化和分配内存
+    M_ = M;
+    quant_ = std::make_shared<SQ4Quantizer>(dim_);  // 用于量化编码和存储原始向量数据
+    searcher_.reset();
 }
 
 tl::expected<std::vector<int64_t>, Error>
@@ -166,6 +172,9 @@ HNSW::add(const DatasetPtr& base) {
         std::vector<int64_t> failed_ids;
 
         std::unique_lock lock(rw_mutex_);
+        
+        if (final_graph_->initialized() || alg_hnsw == nullptr) return failed_ids;         // 索引已经完成构建，不能再添加数据
+
         if (auto result = init_memory_space(); not result.has_value()) {
             return tl::unexpected(result.error());
         }
@@ -176,6 +185,52 @@ HNSW::add(const DatasetPtr& base) {
                 failed_ids.push_back(ids[i]);
             }
         }
+        // wk：训练SQ4量化器，并将原始数据存到reorderer当中去
+        quant_->add_points(vectors, num_elements);
+
+        // 在序列化的位置提取图和生成量化编码？
+
+        // wk: 当插入达 1000000 时，提取 GlassGraph 并进行量化编码
+        // auto alg_hnsw_ptr = static_cast<hnswlib::HierarchicalNSW*>(alg_hnsw.get());
+        // int nb = alg_hnsw_ptr->getCurrentElementCount();
+        // if (nb >= 1000000 && !final_graph_->initialized()) {        // 以 final_graph_ 是否被初始化判断是否完成索引构建
+        //     // 提取 GlassGraph
+        //     final_graph_->init(nb, 2 * M_);         // 为 data(存图结构)和labels分配内存
+        //     for (int i = 0; i < nb; ++i) {
+        //         int *edges = (int *)alg_hnsw_ptr->get_linklist0(i);
+        //         for (int j = 1; j <= edges[0]; ++j) {
+        //             final_graph_->at(i, j - 1) = edges[j];
+        //         }
+        //         // 设置 label
+        //         final_graph_->set_label(i, alg_hnsw_ptr->getExternalLabel(i));
+        //     }
+        //     auto initializer = std::make_unique<HNSWInitializer>(nb, M_);
+        //     initializer->ep = alg_hnsw_ptr->enterpoint_node_;
+        //     for (int i = 0; i < nb; ++i) {
+        //         int level = alg_hnsw_ptr->element_levels_[i];
+        //         initializer->levels[i] = level;
+        //         if (level > 0) {
+        //             initializer->lists[i].assign(level * M_, -1);
+        //             for (int j = 1; j <= level; ++j) {
+        //                 int *edges = (int *)alg_hnsw_ptr->get_linklist(i, j);
+        //                 for (int k = 1; k <= edges[0]; ++k) {
+        //                     initializer->at(j, i, k - 1) = edges[k];
+        //                 }
+        //             }
+        //         }
+        //     }
+        //     final_graph_->initializer = std::move(initializer);
+
+        //     // 此时就可以丢掉 alg_hnsw 了，后面都不用了
+        //     alg_hnsw.reset();
+        //     // 为sq4编码分配内存，并进行编码
+        //     quant_->encode_all_points();
+
+        //     // 构建 searcher
+        //     searcher_.reset();
+        //     searcher_ = std::make_shared<Searcher<SQ4Quantizer>>(final_graph_.get(), quant_.get());
+        // }
+
 
         return failed_ids;
     } catch (const std::invalid_argument& e) {
@@ -192,11 +247,135 @@ HNSW::knn_search_internal(const DatasetPtr& query,
                           const FilterType& filter_obj) const {
     if (filter_obj) {
         BitsetOrCallbackFilter filter(filter_obj);
-        return this->knn_search(query, k, parameters, &filter);
+        // return this->knn_search(query, k, parameters, &filter);
+        return this->sq4_knn_search(query, k, parameters, &filter);     // 改成sq4_knn_search
     } else {
-        return this->knn_search(query, k, parameters, nullptr);
+        // return this->knn_search(query, k, parameters, nullptr);
+        return this->sq4_knn_search(query, k, parameters, nullptr);
     }
 };
+
+void 
+HNSW::prepare_sq4_searcher() {
+    if (alg_hnsw == nullptr || final_graph_->initialized()) {
+        return;
+    }
+
+    auto alg_hnsw_ptr = static_cast<hnswlib::HierarchicalNSW*>(alg_hnsw.get());
+    int nb = alg_hnsw_ptr->getCurrentElementCount(); 
+    vsag::logger::debug("prepare_sq4_searcher, nb=:{}", nb);
+
+    // 提取 GlassGraph
+    final_graph_->init(nb, 2 * M_);         // 为 data(存图结构)和labels分配内存
+    for (int i = 0; i < nb; ++i) {
+        int *edges = (int *)alg_hnsw_ptr->get_linklist0(i);
+        for (int j = 1; j <= edges[0]; ++j) {
+            final_graph_->at(i, j - 1) = edges[j];
+        }
+        // 设置 label
+        final_graph_->set_label(i, alg_hnsw_ptr->getExternalLabel(i));
+    }
+    auto initializer = std::make_unique<HNSWInitializer>(nb, M_);
+    initializer->ep = alg_hnsw_ptr->enterpoint_node_;
+    for (int i = 0; i < nb; ++i) {
+        int level = alg_hnsw_ptr->element_levels_[i];
+        initializer->levels[i] = level;
+        if (level > 0) {
+            initializer->lists[i].assign(level * M_, -1);
+            for (int j = 1; j <= level; ++j) {
+                int *edges = (int *)alg_hnsw_ptr->get_linklist(i, j);
+                for (int k = 1; k <= edges[0]; ++k) {
+                    initializer->at(j, i, k - 1) = edges[k];
+                }
+            }
+        }
+    }
+    final_graph_->initializer = std::move(initializer);
+
+    // 此时就可以丢掉 alg_hnsw 了，后面都不用了
+    alg_hnsw.reset();
+    // 为sq4编码分配内存，并进行编码
+    quant_->encode_all_points();
+
+    // 构建 searcher
+    searcher_.reset();
+    searcher_ = std::make_shared<Searcher<SQ4Quantizer>>(final_graph_.get(), quant_.get());
+}
+
+
+tl::expected<DatasetPtr, Error>
+HNSW::sq4_knn_search(const DatasetPtr& query,
+                 int64_t k,
+                 const std::string& parameters,
+                 hnswlib::BaseFilterFunctor* filter_ptr) const {
+    SlowTaskTimer t("hnsw knnsearch", 20);
+
+    try {
+        // check query vector
+        // CHECK_ARGUMENT(query->GetNumElements() == 1, "query dataset should contain 1 vector only");
+        auto vector = query->GetFloat32Vectors();
+        // int64_t query_dim = query->GetDim();
+        // CHECK_ARGUMENT(
+        //     query_dim == dim_,
+        //     fmt::format("query.dim({}) must be equal to index.dim({})", query_dim, dim_));
+
+        // check k
+        // CHECK_ARGUMENT(k > 0, fmt::format("k({}) must be greater than 0", k))
+        k = std::min(k, GetNumElements());
+
+        std::shared_lock lock(rw_mutex_);
+
+        // check search parameters
+        // auto params = HnswSearchParameters::FromJson(parameters);
+
+        // perform search，使用 searcher 进行搜索
+        double time_cost;
+        Timer t(time_cost);
+        // searcher_->SetEf(params.ef_search);
+        // 获取到的results已经是从小到大排好序的<ids, dist>向量r
+        auto results = searcher_->Search(vector, k);
+
+        // update stats
+        {
+            std::lock_guard<std::mutex> lock(stats_mutex_);
+            result_queues_[STATSTIC_KNN_TIME].Push(time_cost);
+        }
+
+        // return result
+        auto result = Dataset::Make();
+        if (results.size() == 0) {
+            result->Dim(0)->NumElements(1);
+            return result;
+        }
+
+        result->Dim(results.size())->NumElements(1)->Owner(true, allocator_->GetRawAllocator());
+
+        int64_t* ids = (int64_t*)allocator_->Allocate(sizeof(int64_t) * results.size());
+        result->Ids(ids);
+        float* dists = (float*)allocator_->Allocate(sizeof(float) * results.size());
+        result->Distances(dists);
+
+        // for (int64_t j = results.size() - 1; j >= 0; --j) {
+        //     dists[j] = results.top().first;
+        //     ids[j] = results.top().second;
+        //     results.pop();
+        // }
+        for (int64_t j = 0; j < results.size(); ++j) {
+            ids[j] = results[j].first;
+            dists[j] = results[j].second;
+        }
+
+        return std::move(result);
+    } catch (const std::invalid_argument& e) {
+        LOG_ERROR_AND_RETURNS(ErrorType::INVALID_ARGUMENT,
+                              "failed to perform knn_search(invalid argument): ",
+                              e.what());
+    } catch (const std::bad_alloc& e) {
+        LOG_ERROR_AND_RETURNS(ErrorType::NO_ENOUGH_MEMORY,
+                              "failed to perform knn_search(not enough memory): ",
+                              e.what());
+    }
+}
 
 tl::expected<DatasetPtr, Error>
 HNSW::knn_search(const DatasetPtr& query,
@@ -454,6 +633,41 @@ HNSW::serialize() const {
     }
 }
 
+// TODO
+// tl::expected<BinarySet, Error>
+// HNSW::serialize() const {
+//     if (alg_hnsw && !final_graph_->initialized()) {
+//         prepare_sq4_searcher();
+//     }
+    
+//     SlowTaskTimer t("hnsw serialize");
+
+//     // 计算需要持久化的大小
+//     size_t final_graph_size = final_graph_->calcSerializeSize();
+//     size_t quant_size = quant_->calcSerializeSize();
+
+//     size_t num_bytes = final_graph_size + quant_size;
+//     try {
+//         std::shared_ptr<int8_t[]> bin(new int8_t[num_bytes]);
+//         std::shared_lock lock(rw_mutex_);
+//         // alg_hnsw->saveIndex(bin.get());
+//         // 先图后量化器
+//         final_graph_->Serialize(bin.get());
+//         quant_->Serialize(bin.get() + final_graph_size);
+
+//         Binary b{
+//             .data = bin,
+//             .size = num_bytes,
+//         };
+//         BinarySet bs;
+//         bs.Set(HNSW_DATA, b);
+//         return bs;
+//     } catch (const std::bad_alloc& e) {
+//         LOG_ERROR_AND_RETURNS(
+//             ErrorType::NO_ENOUGH_MEMORY, "failed to serialize(bad alloc): ", e.what());
+//     }
+// }
+
 tl::expected<void, Error>
 HNSW::serialize(std::ostream& out_stream) {
     if (GetNumElements() == 0) {
@@ -480,6 +694,60 @@ HNSW::serialize(std::ostream& out_stream) {
 
     return {};
 }
+
+
+tl::expected<void, Error>
+HNSW::test_serialize(std::ostream& out_stream) {
+    if (GetNumElements() == 0) {
+        LOG_ERROR_AND_RETURNS(ErrorType::INDEX_EMPTY, "failed to serialize: hnsw index is empty");
+
+        // FIXME(wxyu): cannot support serialize empty index by stream
+        // auto bs = empty_binaryset();
+        // for (const auto& key : bs.GetKeys()) {
+        //     auto b = bs.Get(key);
+        //     out_stream.write((char*)b.data.get(), b.size);
+        // }
+        // return {};
+    }
+
+    SlowTaskTimer t("hnsw serialize");
+
+    // no expected exception
+    std::unique_lock lock(rw_mutex_);   // 改成 unique_lock
+
+    // 尝试构建量化图和进行量化编码
+    if (final_graph_ && !final_graph_->initialized()) {
+        vsag::logger::debug("TRACE LOG[test_serialize]: prepare_sq4_searcher");
+        prepare_sq4_searcher();
+    }
+
+    // alg_hnsw->saveIndex(out_stream);
+    // if (use_conjugate_graph_) {
+    //     conjugate_graph_->Serialize(out_stream);
+    // }
+
+    // 增加量化图和量化器的序列化
+    final_graph_->Serialize(out_stream);
+    quant_->Serialize(out_stream);
+
+    return {};
+}
+
+// TODO
+// tl::expected<void, Error>
+// HNSW::sq4_serialize(std::ostream& out_stream) {
+//     if (alg_hnsw && !final_graph_->initialized()) {
+//         prepare_sq4_searcher();
+//     }
+
+//     SlowTaskTimer t("sq4 serialize");
+//     std::shared_lock lock(rw_mutex_);       // 不要忘记加锁
+//     // 先图后量化器
+//     final_graph_->Serialize(out_stream);
+//     quant_->Serialize(out_stream);
+//     return {};
+// }
+
 
 tl::expected<void, Error>
 HNSW::deserialize(const BinarySet& binary_set) {
@@ -575,6 +843,58 @@ HNSW::deserialize(std::istream& in_stream) {
 
     return {};
 }
+
+tl::expected<void, Error>
+HNSW::test_deserialize(std::istream& in_stream) {
+    SlowTaskTimer t("hnsw deserialize");
+    // if (this->alg_hnsw->getCurrentElementCount() > 0) {
+    //     LOG_ERROR_AND_RETURNS(ErrorType::INDEX_NOT_EMPTY,
+    //                           "failed to deserialize: index is not empty");
+    // }
+
+    try {
+        std::unique_lock lock(rw_mutex_);
+        // if (auto result = init_memory_space(); not result.has_value()) {
+        //     return tl::unexpected(result.error());
+        // }
+        // alg_hnsw->loadIndex(in_stream, this->space.get());
+        // if (use_conjugate_graph_ and not conjugate_graph_->Deserialize(in_stream).has_value()) {
+        //     throw std::runtime_error("error in deserialize conjugate graph");
+        // }
+
+        // 反序列化量化图和量化器
+        final_graph_->Deserialize(in_stream);
+        quant_->Deserialize(in_stream);
+        searcher_.reset();
+        searcher_ = std::make_shared<Searcher<SQ4Quantizer>>(final_graph_.get(), quant_.get());
+
+    } catch (const std::runtime_error& e) {
+        LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to deserialize: ", e.what());
+    }
+
+    return {};
+}
+
+
+// TODO
+// 反序列化应该只需要用到这个接口
+// tl::expected<void, Error>
+// HNSW::deserialize(std::istream& in_stream) {
+//     SlowTaskTimer t("sq4 deserialize");
+//     try {
+//         std::unique_lock lock(rw_mutex_);
+//         // 先图后量化器
+//         final_graph_->Deserialize(in_stream);
+//         quant_->Deserialize(in_stream);
+//         // 构建 searcher
+//         searcher_.reset();
+//         searcher_ = std::make_shared<Searcher<SQ4Quantizer>>(final_graph_.get(), quant_.get());
+//     } catch (const std::runtime_error& e) {
+//         LOG_ERROR_AND_RETURNS(ErrorType::READ_ERROR, "failed to deserialize: ", e.what());
+//     }
+//     return {};
+// }
+
 
 std::string
 HNSW::GetStats() const {

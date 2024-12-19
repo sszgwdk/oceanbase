@@ -15,7 +15,7 @@ set (VSAG_SRCS ${CPP_SRCS} ${CPP_FACTORY_SRCS} ${CPP_INDEX_SRCS} ${CPP_CONJUGATE
 add_library (vsag_test SHARED ${VSAG_SRCS})
 add_library (vsag_static_test STATIC ${VSAG_SRCS})
 
-set (VSAG_DEP_LIBS diskann pthread m dl simd fmt::fmt-header-only nlohmann_json::nlohmann_json roaring)
+set (VSAG_DEP_LIBS diskann pthread m dl simd_test fmt::fmt-header-only nlohmann_json::nlohmann_json roaring)
 target_link_libraries (vsag_test ${VSAG_DEP_LIBS})
 target_link_libraries (vsag_static_test ${VSAG_DEP_LIBS})
 maybe_add_dependencies (vsag_test spdlog roaring openblas boost mkl)

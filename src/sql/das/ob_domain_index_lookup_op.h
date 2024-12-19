@@ -110,6 +110,8 @@ protected:
   ObObj doc_id_key_obj_;
 
   bool need_scan_aux_;
+  // whp
+  bool enable_aux_skip_ = true;
 
   static const int64_t SORT_MEMORY_LIMIT = 48L * 1024L * 1024L;
   static const int64_t MAX_NUM_PER_BATCH = 1000;

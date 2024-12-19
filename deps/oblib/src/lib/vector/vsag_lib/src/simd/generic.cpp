@@ -59,4 +59,21 @@ PQDistanceFloat256(const void* single_dim_centers, float single_dim_val, void* r
     }
 }
 
+int32_t L2SqrSQ4(const uint8_t *x, const uint8_t *y, int d) {
+  int32_t sum = 0;
+  for (int i = 0; i < d; ++i) {
+    {
+      int32_t xx = x[i / 2] & 15;
+      int32_t yy = y[i / 2] & 15;
+      sum += (xx - yy) * (xx - yy);
+    }
+    {
+      int32_t xx = x[i / 2] >> 4 & 15;
+      int32_t yy = y[i / 2] >> 4 & 15;
+      sum += (xx - yy) * (xx - yy);
+    }
+  }
+  return sum;
+}
+
 }  // namespace vsag
