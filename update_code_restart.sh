@@ -2,8 +2,9 @@
 # 重新编译 + 切换二进制文件
 # 切换二进制文件
 ./tools/deploy/obd.sh stop -n obcluster
-bash build.sh release --make -j4
+bash build.sh debug --make -j16
 cp build_release/src/observer/observer /data/obcluster/bin/observer
+# cp build_debug/src/observer/observer /data/obcluster/bin/observer
 echo "success cp observer to /data/obcluster/bin/observer"
 sleep 3
 
