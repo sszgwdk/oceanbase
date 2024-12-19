@@ -531,7 +531,7 @@ int ObVectorIndexLookupOp::set_lookup_vid_key(ObRowkey& doc_id_rowkey)
   int ret = OB_SUCCESS;
   ObNewRange doc_id_range;
   uint64_t ref_table_id = doc_id_lookup_ctdef_->ref_table_id_;
-  LOG_INFO("whp: in set_lookup_vid_key, ref_table_id, doc_id_rowkey", K(ref_table_id), K(doc_id_rowkey));
+  // LOG_INFO("whp: in set_lookup_vid_key, ref_table_id, doc_id_rowkey", K(ref_table_id), K(doc_id_rowkey));
   if (OB_FAIL(doc_id_range.build_range(ref_table_id, doc_id_rowkey))) {
     LOG_WARN("build doc id lookup range failed", K(ret));
   } else if (OB_FAIL(doc_id_scan_param_.key_ranges_.push_back(doc_id_range))) {
@@ -546,13 +546,13 @@ int ObVectorIndexLookupOp::set_lookup_vid_key(ObRowkey& doc_id_rowkey)
 int ObVectorIndexLookupOp::set_main_table_lookup_key(ObRowkey& table_rowkey) {
   int ret = OB_SUCCESS;
   ObNewRange lookup_range;
-  LOG_INFO("whp: table_rowkey", K(table_rowkey));
+  // LOG_INFO("whp: table_rowkey", K(table_rowkey));
   if (OB_FAIL(lookup_range.build_range(lookup_ctdef_->ref_table_id_, table_rowkey))) {
     LOG_WARN("failed to build lookup range", K(ret), K(table_rowkey));
   } else if (OB_FAIL(scan_param_.key_ranges_.push_back(lookup_range))) {
     LOG_WARN("store lookup key range failed", K(ret), K(scan_param_));
   } else {
-    LOG_INFO("whp: get rowkey from docid rowkey table", K(ret), K(table_rowkey), K(lookup_range));
+    // LOG_INFO("whp: get rowkey from docid rowkey table", K(ret), K(table_rowkey), K(lookup_range));
   }
   return ret;
 }
@@ -569,7 +569,7 @@ int ObVectorIndexLookupOp::set_main_table_lookup_keys(ObNewRow *row, int64_t siz
       ObRowkey doc_id_rowkey(&(row->get_cell(i)), 1);
       int64_t vid_val;
       doc_id_rowkey.get_obj_ptr()->get_int(vid_val);
-      LOG_INFO("whp: doc_id_rowkey, vid_val", K(doc_id_rowkey), K(vid_val));
+      // LOG_INFO("whp: doc_id_rowkey, vid_val", K(doc_id_rowkey), K(vid_val));
       int32_t rowkey_val = vid_val - 2010001;
       common::ObArenaAllocator &lookup_alloc = lookup_memctx_->get_arena_allocator();
       void *buf = nullptr;
@@ -578,7 +578,7 @@ int ObVectorIndexLookupOp::set_main_table_lookup_keys(ObNewRow *row, int64_t siz
       obj_ptr[0].set_int32(rowkey_val);
       // doc_id_rowkey 转 table_rowkey，根据日志，rowkey_cnt 应该为 1
       ObRowkey table_rowkey(obj_ptr, /*rowkey_cnt*/ 1);   
-      LOG_INFO("whp: table_rowkey, rowkey_val", K(table_rowkey), K(rowkey_val));
+      // LOG_INFO("whp: table_rowkey, rowkey_val", K(table_rowkey), K(rowkey_val));
       if (OB_FAIL(set_main_table_lookup_key(table_rowkey))) {
         LOG_WARN("failed to set main table lookup key", K(ret));
       }
@@ -1180,7 +1180,7 @@ int ObVectorIndexLookupOp::set_main_table_lookup_key()
     } else if (OB_FAIL(scan_param_.key_ranges_.push_back(lookup_range))) {
       LOG_WARN("store lookup key range failed", K(ret), K(scan_param_));
     } else {
-      LOG_INFO("whp:get rowkey from docid rowkey table", K(ret), K(table_rowkey), K(lookup_range));
+      // LOG_INFO("whp:get rowkey from docid rowkey table", K(ret), K(table_rowkey), K(lookup_range));
     }
   }
   return ret;
