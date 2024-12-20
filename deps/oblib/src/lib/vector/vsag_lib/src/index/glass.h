@@ -21,8 +21,8 @@ namespace vsag {
 
 
 // 内存预取
-const int FP32_MAX_BATCH_PREFETCH_BYTES = 3072;  // 
-const int SQ4_MAX_BATCH_PREFETCH_BYTES = 3072;  //可控制提前预取的步数
+const int FP32_MAX_BATCH_PREFETCH_BYTES = 4096;  // 
+const int SQ4_MAX_BATCH_PREFETCH_BYTES = 4096;  //可控制提前预取的步数
 inline void prefetch_L1(const void *address) {
 #ifdef USE_SSE
   _mm_prefetch((const char *)address, _MM_HINT_T0);
