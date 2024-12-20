@@ -33,7 +33,7 @@ int ObCodeGenerator::generate(const ObLogPlan &log_plan,
   if (OB_SUCC(ret) && batch_size > 0) {
     // wk：硬编码
     if (batch_size == 8) {
-      batch_size = 40;
+      batch_size = 30;
     }
     log_plan.get_optimizer_context().set_batch_size(batch_size);
     phy_plan.set_batch_size(batch_size);
