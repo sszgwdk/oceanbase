@@ -424,7 +424,11 @@ target_link_directories(
   ${CMAKE_BINARY_DIR}/deps/oblib/src/lib//vector/vsag_lib/src
   ${CMAKE_BINARY_DIR}/deps/oblib/src/lib//vector/vsag_lib/src/simd
   ${CMAKE_BINARY_DIR}/_deps/fmt-build
+  /usr/lib64/
 )
+#  /usr/lib64/
+#    libomp.so
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
 set(FMT_STATIC "")
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -448,6 +452,7 @@ if (NOT OB_BUILD_VSAG_RPM)
     libgomp_static.a
     libroaring.a
     ${FMT_STATIC}
+    libomp.so
   )
 else()
   target_link_libraries(oblib_lib

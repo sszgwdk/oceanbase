@@ -9,6 +9,7 @@
 #include <sys/mman.h>
 #include <random>
 #include <cmath>
+#include <omp.h>
 
 #include "../algorithm/hnswlib/hnswlib.h"
 #include "../simd/simd.h"
@@ -21,8 +22,8 @@ namespace vsag {
 
 
 // 内存预取
-const int FP32_MAX_BATCH_PREFETCH_BYTES = 3072;  // 
-const int SQ4_MAX_BATCH_PREFETCH_BYTES = 3072;  //可控制提前预取的步数
+const int FP32_MAX_BATCH_PREFETCH_BYTES = 2048;  // 
+const int SQ4_MAX_BATCH_PREFETCH_BYTES = 2048;  //可控制提前预取的步数
 inline void prefetch_L1(const void *address) {
 #ifdef USE_SSE
   _mm_prefetch((const char *)address, _MM_HINT_T0);
@@ -692,7 +693,7 @@ template <typename Quantizer> struct Searcher : public SearcherBase {
 
   // 硬编码
   // Search parameters
-  int ef = 110;
+  int ef = 160;
 
   // Memory prefetch parameters
   int po = 1;
@@ -847,51 +848,116 @@ template <typename Quantizer> struct Searcher : public SearcherBase {
   // TODO(wk): searchwithFilter
   // void SearchWithFilter(const float *q, int k, int *dst, const int *filter);
 
+  // template <typename Pool, typename Computer>
+  // void SearchImpl(Pool &pool, const Computer &computer) const {
+  //   int vec_po = computer.get_suggest_po();
+
+  //   while (pool.has_next()) {
+  //     auto u = pool.pop();
+  //     graph->prefetch(u, graph_po);
+  //     // for (int i = 0; i < po; ++i) {
+  //     // 最大化预取，pl = 1，每次取64字节，正好是一条量化向量数据
+  //     // 每次预取 vec_po 个向量
+  //     int break_pos = -1;
+  //     for (int i = 0; i < graph->K; ++i) {
+  //       int to = graph->at(u, i);
+  //       if (to == -1) {
+  //         break_pos = i;
+  //         break;
+  //       }
+  //       // wk：(TODO)这里似乎有点问题，pool本身比较大，可能会有比较严重的缓存污染？
+  //       // 已经访问过的也不进行预取
+  //       // if (pool.vis.get(to)) {
+  //       //   continue;
+  //       // }        
+  //       // computer.prefetch(to, pl);
+  //       if (i < vec_po) {
+  //         computer.prefetch_one(to);
+  //       }
+  //     }
+  //     if (break_pos == -1) {
+  //       break_pos = graph->K;
+  //     }
+
+  //     omp_set_num_threads(omp_get_max_threads());
+  //     // #pragma omp parallel for schedule(dynamic) num_threads(4)
+  //     #pragma omp parallel for
+  //     for (int i = 0; i < break_pos; ++i) {
+  //       int v = graph->at(u, i);
+  //       // wk: openMP 不允许break
+  //       // if (v == -1) {
+  //       //   break;
+  //       // }
+  //       // 
+  //       // if (i + po < graph->K && graph->at(u, i + po) != -1) {
+  //       //   int to = graph->at(u, i + po);
+  //       //   computer.prefetch(to, pl);
+  //       // }
+  //       if (pool.vis.get(v)) {
+  //         continue;
+  //       }
+  //       // #pragma omp atomic read
+  //       // bool is_visited = pool.vis.get(v);
+  //       // if (is_visited) {
+  //       //     continue;
+  //       // }
+
+  //       auto cur_dist = computer(v);
+  //       #pragma omp critical
+  //       {
+  //         pool.vis.set(v);
+  //         pool.insert(v, cur_dist);
+  //       }
+  //       // 提前 vec_po 步预取
+  //       // if (i + vec_po < graph->K && graph->at(u, i + vec_po) != -1) {
+  //       //   int to = graph->at(u, i + vec_po);
+  //       //   computer.prefetch_one(to);
+  //       // }
+  //     }
+  //   }
+  // }
+
   template <typename Pool, typename Computer>
   void SearchImpl(Pool &pool, const Computer &computer) const {
     int vec_po = computer.get_suggest_po();
-
+    // 提前分配好向量
+    // std::vector<int> neighbors(graph->K);
+    std::vector<int> results(graph->K);
     while (pool.has_next()) {
       auto u = pool.pop();
       graph->prefetch(u, graph_po);
-      // for (int i = 0; i < po; ++i) {
-      // 最大化预取，pl = 1，每次取64字节，正好是一条量化向量数据
-      // 每次预取 vec_po 个向量
-      for (int i = 0; i < vec_po && i < graph->K; ++i) {
+      int cnt = 0;
+      std::vector<int> neighbors;
+      for (int i = 0; i < graph->K; ++i) {
         int to = graph->at(u, i);
         if (to == -1) {
           break;
         }
-        // wk：(TODO)这里似乎有点问题，pool本身比较大，可能会有比较严重的缓存污染？
-        // 已经访问过的也不进行预取
-        // if (pool.vis.get(to)) {
-        //   continue;
-        // }        
-        // computer.prefetch(to, pl);
-        computer.prefetch_one(to);
-      }
-      for (int i = 0; i < graph->K; ++i) {
-        int v = graph->at(u, i);
-        if (v == -1) {
-          break;
-        }
-        // 
-        // if (i + po < graph->K && graph->at(u, i + po) != -1) {
-        //   int to = graph->at(u, i + po);
-        //   computer.prefetch(to, pl);
-        // }
-        if (pool.vis.get(v)) {
+        if (pool.vis.get(to)) {
           continue;
         }
-        pool.vis.set(v);
-        auto cur_dist = computer(v);
-        pool.insert(v, cur_dist);
 
-        // 提前 vec_po 步预取
-        if (i + vec_po < graph->K && graph->at(u, i + vec_po) != -1) {
-          int to = graph->at(u, i + vec_po);
-          computer.prefetch_one(to);
-        }
+        // 提前标记上
+        pool.vis.set(to);
+        neighbors.push_back(to);
+        cnt++;
+      }
+      // 预取
+      for (int i = 0; i < cnt && i < vec_po; ++i) {
+          computer.prefetch_one(neighbors[i]);
+      }
+
+      // openMP 并行计算距离：没啥用
+      // #pragma omp parallel for schedule(static) num_threads(omp_get_max_threads())
+      for (size_t idx = 0; idx < cnt; ++idx) {
+        int v = neighbors[idx];
+        auto cur_dist = computer(v);
+        results[idx] = cur_dist;
+      }
+      
+      // 插入pool
+      for (size_t idx = 0; idx < cnt; ++idx) {
+        pool.insert(neighbors[idx], results[idx]);
       }
     }
   }
@@ -1275,6 +1341,7 @@ struct SQ4Quantizer {
       computer.prefetch_one(pool.id(i));
     }
 
+    // #pragma omp parallel for
     for (int i = 0; i < cap; ++i) {
       int id = pool.id(i);
       float dist = computer(id);
