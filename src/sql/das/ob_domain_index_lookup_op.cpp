@@ -196,6 +196,10 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
             LOG_INFO("whp: vid", K(vid), K(id), K(c1));
             ids_.push_back(id);
             c1s_.push_back(c1);
+
+            const_cast<ObObj*>(key_range.get_start_key().get_obj_ptr())->set_int(id);
+            const_cast<ObObj*>(key_range.get_end_key().get_obj_ptr())->set_int(id);
+            scan_param_.key_ranges_.push_back(key_range);
           }
           doc_id_scan_param_.key_ranges_.reuse();
           // doc_id_scan_param_.ss_key_ranges_.reuse();
@@ -206,6 +210,10 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
         if (enable_aux_skip_) {
           for (auto& key_range : doc_id_scan_param_.key_ranges_) {
             LOG_INFO("whp: key_range", K(key_range));
+            int64_t vid = key_range.get_start_key().get_obj_ptr()->get_int();
+            int64_t id = (1ll << 32) - 1 & vid;
+            const_cast<ObObj*>(key_range.get_start_key().get_obj_ptr())->set_int(id);
+            const_cast<ObObj*>(key_range.get_end_key().get_obj_ptr())->set_int(id);
             scan_param_.key_ranges_.push_back(key_range);
           }
           next_state();
@@ -238,7 +246,8 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
       }
       case OUTPUT_ROWS: {
         // whp
-        if (enable_mainTable_skip_) {
+        ExprFixedArray* output_exprs = const_cast<ExprFixedArray*>(&get_output_expr());
+        if (enable_mainTable_skip_ && output_exprs->count() == 1) {
           if (output_idx_ == ids_.size()) {
             // state_ = FINISHED;
             next_state();  // assert len(candidates) == len(set(candidates)), "Implementation returned duplicated candidates"
@@ -246,7 +255,7 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
           }
 
           lookup_rtdef_->p_pd_expr_op_->clear_evaluated_flag();
-          ExprFixedArray* output_exprs = const_cast<ExprFixedArray*>(&get_output_expr());
+          
 
           ObExpr* id_expr = output_exprs->at(0);
           ObDatum& id_datum = id_expr->locate_expr_datum(get_eval_ctx());
@@ -283,6 +292,8 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
           //                       K(ret), K(lookup_row_cnt_), K(lookup_rowkey_cnt_));
           break;
         }
+
+        enable_mainTable_skip_ = false;
 
         if (OB_FAIL(get_next_rows_from_data_table(count, capacity))) {
           if (OB_ITER_END == ret) {
