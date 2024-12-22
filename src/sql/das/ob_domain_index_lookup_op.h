@@ -112,6 +112,9 @@ protected:
   bool need_scan_aux_;
   // whp
   bool enable_aux_skip_ = true;
+  bool enable_mainTable_skip_ = true;
+  std::vector<int64_t> ids_, c1s_;
+  size_t output_idx_ = 0;
 
   static const int64_t SORT_MEMORY_LIMIT = 48L * 1024L * 1024L;
   static const int64_t MAX_NUM_PER_BATCH = 1000;

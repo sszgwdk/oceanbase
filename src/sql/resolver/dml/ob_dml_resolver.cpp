@@ -8348,10 +8348,10 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
   } else if (OB_NOT_NULL(column_schema) && column_schema->is_doc_id_column()
       && OB_FAIL(fill_doc_id_expr_param(table_item.table_id_, table_item.ref_id_, table_schema, ref_expr))) {
     LOG_WARN("fail to fill doc id expr param", K(ret), K(table_item), KP(table_schema), KP(ref_expr));
-  } else if (OB_NOT_NULL(column_schema) && column_schema->is_vec_vid_column()
+  } /*else if (OB_NOT_NULL(column_schema) && column_schema->is_vec_vid_column()
       && OB_FAIL(fill_vec_id_expr_param(table_item.table_id_, table_item.ref_id_, table_schema, ref_expr))) {
     LOG_WARN("fail to fill vec vid expr param", K(ret), K(table_item), KP(table_schema), KP(ref_expr));
-  }
+  }*/
 
   bool is_default_udt_constructor = false;
   ObArray<ObRawExpr*> udf_construct_exprs;
@@ -8447,6 +8447,12 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
       } else { /*do nothing*/ }
     }
   }
+
+  if (OB_NOT_NULL(column_schema) && column_schema->is_vec_vid_column()
+      && OB_FAIL(fill_vec_id_expr_param(table_item.table_id_, table_item.ref_id_, table_schema, ref_expr))) {
+    LOG_WARN("fail to fill vec vid expr param", K(ret), K(table_item), KP(table_schema), KP(ref_expr));
+  }
+
   int64_t var_array_idx = OB_INVALID_INDEX_INT64;
   ObLocalSessionVar local_vars(allocator_);
   if (OB_SUCC(ret)) {

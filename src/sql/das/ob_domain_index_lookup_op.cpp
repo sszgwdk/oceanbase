@@ -188,8 +188,22 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
         break;
       }
       case AUX_LOOKUP: {
+        if (enable_mainTable_skip_) {
+          for (auto& key_range : doc_id_scan_param_.key_ranges_) {
+            int64_t vid = key_range.get_start_key().get_obj_ptr()->get_int();
+            int64_t id = (1ll << 32) - 1 & vid;
+            int64_t c1 = vid >> 32;
+            LOG_INFO("whp: vid", K(vid), K(id), K(c1));
+            ids_.push_back(id);
+            c1s_.push_back(c1);
+          }
+          next_state();
+          break;
+        }
+
         if (enable_aux_skip_) {
           for (auto& key_range : doc_id_scan_param_.key_ranges_) {
+            LOG_INFO("whp: key_range", K(key_range));
             scan_param_.key_ranges_.push_back(key_range);
           }
           next_state();
@@ -207,6 +221,12 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
       }
       case DO_LOOKUP: {
         lookup_row_cnt_ = 0;
+        // whp
+        if (enable_mainTable_skip_) {
+          next_state();
+          break;
+        }
+
         if (OB_FAIL(do_index_lookup())) {
           LOG_WARN("do index lookup failed", K(ret));
         } else if (OB_FAIL(next_state())) {
@@ -215,6 +235,39 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
         break;
       }
       case OUTPUT_ROWS: {
+        // whp
+        if (enable_mainTable_skip_) {
+          if (output_idx_ == ids_.size()) {
+            state_ = FINISHED;
+            // next_state();  // assert len(candidates) == len(set(candidates)), "Implementation returned duplicated candidates"
+            break;
+          }
+
+          lookup_rtdef_->p_pd_expr_op_->clear_evaluated_flag();
+          ExprFixedArray* output_exprs = const_cast<ExprFixedArray*>(&get_output_expr());
+
+          ObExpr* id_expr = output_exprs->at(0);
+          ObDatum& id_datum = id_expr->locate_expr_datum(get_eval_ctx());
+          id_datum.set_int(ids_[output_idx_]);
+
+          if (output_exprs->count() == 2) {    // 混合标量查询
+            ObExpr* c1_expr = output_exprs->at(1);
+            ObDatum& c1_datum = c1_expr->locate_expr_datum(get_eval_ctx());
+            c1_datum.set_int(c1s_[output_idx_]);
+          }
+
+          ++output_idx_;
+          ++lookup_row_cnt_;
+          ++count;
+          got_next_row = true;
+
+          LOG_INFO("whp: output_exprs count", K(output_exprs->count()));
+
+          // PRINT_VECTORIZED_ROWS(SQL, DEBUG, get_eval_ctx(), get_output_expr(), count, skip,
+          //                       K(ret), K(lookup_row_cnt_), K(lookup_rowkey_cnt_));
+          break;
+        }
+
         if (OB_FAIL(get_next_rows_from_data_table(count, capacity))) {
           if (OB_ITER_END == ret) {
             ret = OB_SUCCESS;
@@ -233,6 +286,7 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
           got_next_row = true;
           lookup_row_cnt_ += count;
           const ObBitVector *skip = nullptr;
+          LOG_INFO("whp: get_next_rows_from_data_table", K(count), K(get_output_expr()));
           PRINT_VECTORIZED_ROWS(SQL, DEBUG, get_eval_ctx(), get_output_expr(), count, skip,
                                 K(ret), K(lookup_row_cnt_), K(lookup_rowkey_cnt_));
         }

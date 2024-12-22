@@ -30,3 +30,4 @@ sleep 3
 
 # # 运行混合标量查询场景SQL，hybrid_ann.py 位于 ann_benchmarks/algorithms/oceanbase/
 # python ann_benchmarks/algorithms/oceanbase/hybrid_ann.py
+# python ann_benchmarks/algorithms/oceanbase/hybrid_ann_modify.py

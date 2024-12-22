@@ -368,8 +368,10 @@ int ObPxMultiPartSSTableInsertOp::get_next_row_with_cache()
       }
     }
 
+    // whp, add sr para
+    const ObChunkDatumStore::StoredRow *tmp_sr = NULL;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(curr_tablet_store_iter_.get_next_row(child_->get_spec().output_, eval_ctx_))) {
+    } else if (OB_FAIL(curr_tablet_store_iter_.get_next_row(child_->get_spec().output_, eval_ctx_, &tmp_sr))) {
       LOG_WARN("fail to get next row from chunk store", K(ret));
     } else {
       const ObIArray<ObExpr*> &child_expr = child_->get_spec().output_;
@@ -405,9 +407,20 @@ int ObPxMultiPartSSTableInsertOp::get_next_row_with_cache()
         ObTabletID tablet_id = tablet_seq_caches_.at(curr_tablet_idx_).tablet_id_;
         if (is_vec_gen_vid_) {
           // TODO @lhd make vid into struct
+
+          // ver 2
+          int64_t vid = tmp_sr->cells()[1].get_int();
+          LOG_INFO("gen vid", K(vid));
+          datum.set_int(vid);
+          
+          // whp: deprecated
+          
+          // ver 0
           // datum.set_uint(next_autoinc_val);
-          datum.set_int(vid_);
-          ++vid_;
+
+          // ver 1
+          // datum.set_int(vid_);
+          // ++vid_;
         } else {
           datum.set_uint(next_autoinc_val);
         }

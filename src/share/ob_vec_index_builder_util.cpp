@@ -1092,7 +1092,8 @@ int ObVecIndexBuilderUtil::generate_vid_column(
     SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], vec_expr_def) {
       MEMSET(vec_expr_def, 0, sizeof(vec_expr_def));
       int64_t def_pos = 0;
-      if (OB_FAIL(databuff_printf(vec_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH, def_pos, "VEC_VID()"))) {
+      // whp, change from "VEC_VID()" to "VEC_VID(id, c1)"
+      if (OB_FAIL(databuff_printf(vec_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH, def_pos, "VEC_VID(id, c1)"))) {
         LOG_WARN("print generate expr definition prefix failed", K(ret));
       } else {
         ObColumnSchemaV2 column_schema;
