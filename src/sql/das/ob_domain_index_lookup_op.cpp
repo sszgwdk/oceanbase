@@ -293,7 +293,11 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
           break;
         }
 
-        enable_mainTable_skip_ = false;
+        if (enable_mainTable_skip_) {
+          enable_mainTable_skip_ = false;
+          state_ = DO_LOOKUP;
+        }
+        
 
         if (OB_FAIL(get_next_rows_from_data_table(count, capacity))) {
           if (OB_ITER_END == ret) {
