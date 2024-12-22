@@ -165,6 +165,9 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
   bool got_next_row = false;
+  ExprFixedArray* output_exprs = const_cast<ExprFixedArray*>(&get_output_expr());
+  if (output_exprs->count() != 1) enable_mainTable_skip_ = false;
+
   while (OB_SUCC(ret) && !got_next_row) {
     switch (state_) {
       case INDEX_SCAN: {
@@ -196,10 +199,6 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
             LOG_INFO("whp: vid", K(vid), K(id), K(c1));
             ids_.push_back(id);
             c1s_.push_back(c1);
-
-            const_cast<ObObj*>(key_range.get_start_key().get_obj_ptr())->set_int(id);
-            const_cast<ObObj*>(key_range.get_end_key().get_obj_ptr())->set_int(id);
-            scan_param_.key_ranges_.push_back(key_range);
           }
           doc_id_scan_param_.key_ranges_.reuse();
           // doc_id_scan_param_.ss_key_ranges_.reuse();
@@ -246,8 +245,7 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
       }
       case OUTPUT_ROWS: {
         // whp
-        ExprFixedArray* output_exprs = const_cast<ExprFixedArray*>(&get_output_expr());
-        if (enable_mainTable_skip_ && output_exprs->count() == 1) {
+        if (enable_mainTable_skip_) {
           if (output_idx_ == ids_.size()) {
             // state_ = FINISHED;
             next_state();  // assert len(candidates) == len(set(candidates)), "Implementation returned duplicated candidates"
@@ -292,13 +290,8 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
           //                       K(ret), K(lookup_row_cnt_), K(lookup_rowkey_cnt_));
           break;
         }
-
-        if (enable_mainTable_skip_) {
-          enable_mainTable_skip_ = false;
-          state_ = DO_LOOKUP;
-        }
         
-
+        
         if (OB_FAIL(get_next_rows_from_data_table(count, capacity))) {
           if (OB_ITER_END == ret) {
             ret = OB_SUCCESS;
