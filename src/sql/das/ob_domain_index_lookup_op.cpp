@@ -171,7 +171,7 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
         reset_lookup_state();
         int64_t rowkey_count = 0;
         lookup_row_cnt_ = 0;
-        lookup_row_cnt_ = 0;
+        lookup_rowkey_cnt_ = 0;
         if (OB_FAIL(fetch_index_table_rowkeys(rowkey_count, capacity))) {
           LOG_WARN("failed get rowkeys from index table", K(ret));
         } else if (0 == rowkey_count) {
@@ -197,6 +197,8 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
             ids_.push_back(id);
             c1s_.push_back(c1);
           }
+          doc_id_scan_param_.key_ranges_.reuse();
+          // doc_id_scan_param_.ss_key_ranges_.reuse();
           next_state();
           break;
         }
@@ -238,8 +240,8 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
         // whp
         if (enable_mainTable_skip_) {
           if (output_idx_ == ids_.size()) {
-            state_ = FINISHED;
-            // next_state();  // assert len(candidates) == len(set(candidates)), "Implementation returned duplicated candidates"
+            // state_ = FINISHED;
+            next_state();  // assert len(candidates) == len(set(candidates)), "Implementation returned duplicated candidates"
             break;
           }
 
@@ -250,10 +252,24 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
           ObDatum& id_datum = id_expr->locate_expr_datum(get_eval_ctx());
           id_datum.set_int(ids_[output_idx_]);
 
-          if (output_exprs->count() == 2) {    // 混合标量查询
+          if (output_exprs->count() >= 3) {    // 混合标量查询
             ObExpr* c1_expr = output_exprs->at(1);
             ObDatum& c1_datum = c1_expr->locate_expr_datum(get_eval_ctx());
             c1_datum.set_int(c1s_[output_idx_]);
+
+            ObExpr* vec_expr = output_exprs->at(2);
+            ObDatumVector vec_datum = vec_expr->locate_expr_datumvector(get_eval_ctx());
+
+            // if (!vec_datum.datums_) {
+            //   common::ObArenaAllocator &lookup_alloc = lookup_memctx_->get_arena_allocator();
+            //   void *buf = nullptr;
+            //   buf = lookup_alloc.alloc(sizeof(ObDatum) * 128);
+            //   vec_datum.datums_ = new (buf) ObDatum[128];
+            // }
+
+            for (int i = 0; i < 128; i++) {
+              vec_datum.at(i)->set_double(0.0);
+            }
           }
 
           ++output_idx_;
