@@ -196,7 +196,7 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
             int64_t vid = key_range.get_start_key().get_obj_ptr()->get_int();
             int64_t id = (1ll << 32) - 1 & vid;
             int64_t c1 = vid >> 32;
-            LOG_INFO("whp: vid", K(vid), K(id), K(c1));
+            // LOG_INFO("whp: vid", K(vid), K(id), K(c1));
             ids_.push_back(id);
             c1s_.push_back(c1);
           }
@@ -208,7 +208,7 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
 
         if (enable_aux_skip_) {
           for (auto& key_range : doc_id_scan_param_.key_ranges_) {
-            LOG_INFO("whp: key_range", K(key_range));
+            // LOG_INFO("whp: key_range", K(key_range));
             int64_t vid = key_range.get_start_key().get_obj_ptr()->get_int();
             int64_t id = (1ll << 32) - 1 & vid;
             const_cast<ObObj*>(key_range.get_start_key().get_obj_ptr())->set_int(id);
@@ -284,7 +284,7 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
           ++count;
           got_next_row = true;
 
-          LOG_INFO("whp: output_exprs count", K(output_exprs->count()));
+          // LOG_INFO("whp: output_exprs count", K(output_exprs->count()));
 
           // PRINT_VECTORIZED_ROWS(SQL, DEBUG, get_eval_ctx(), get_output_expr(), count, skip,
           //                       K(ret), K(lookup_row_cnt_), K(lookup_rowkey_cnt_));
@@ -310,7 +310,7 @@ int ObDomainIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
           got_next_row = true;
           lookup_row_cnt_ += count;
           const ObBitVector *skip = nullptr;
-          LOG_INFO("whp: get_next_rows_from_data_table", K(count), K(get_output_expr()));
+          // LOG_INFO("whp: get_next_rows_from_data_table", K(count), K(get_output_expr()));
           PRINT_VECTORIZED_ROWS(SQL, DEBUG, get_eval_ctx(), get_output_expr(), count, skip,
                                 K(ret), K(lookup_row_cnt_), K(lookup_rowkey_cnt_));
         }

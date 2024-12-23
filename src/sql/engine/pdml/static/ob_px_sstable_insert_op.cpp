@@ -410,7 +410,7 @@ int ObPxMultiPartSSTableInsertOp::get_next_row_with_cache()
 
           // ver 2
           int64_t vid = tmp_sr->cells()[1].get_int();
-          LOG_INFO("gen vid", K(vid));
+          // LOG_INFO("gen vid", K(vid));
           datum.set_int(vid);
           
           // whp: deprecated
